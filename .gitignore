@@ -1,0 +1,10 @@
+venv
+.vscode
+docs
+original*
+gemini*
+.claude
+.pytest*
+*.pyc
+.vscode
+*.egg-info
