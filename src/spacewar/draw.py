@@ -252,8 +252,7 @@ def draw_enterprise(surface: pygame.Surface, state: GameState) -> None:
     if ship.eflg == EFLG_INACTIVE:
         return
     if ship.eflg == EFLG_EXPLODING:
-        _draw_explosion(surface, ship, exps_start=SHIP_EXPLOSION_TICKS, scale=3)
-        return
+        return   # scatter particles drawn by draw_hyper_particles
     if ship.flags & CLOAK_BIT:
         return   # cloaked — invisible
     bitmap = get_enterprise_sprite(ship.angle)
@@ -270,8 +269,7 @@ def draw_klingon(surface: pygame.Surface, state: GameState) -> None:
     if ship.eflg == EFLG_INACTIVE:
         return
     if ship.eflg == EFLG_EXPLODING:
-        _draw_explosion(surface, ship, exps_start=SHIP_EXPLOSION_TICKS, scale=3)
-        return
+        return   # scatter particles drawn by draw_hyper_particles
     if ship.flags & CLOAK_BIT:
         return
     bitmap = get_klingon_sprite(ship.angle)

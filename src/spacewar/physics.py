@@ -294,12 +294,16 @@ def _tick_planet_animation(state: GameState) -> None:
 # ---------------------------------------------------------------------------
 
 def _tick_hyperspace(state: GameState) -> None:
-    """Advance hyperspace particle animation for both ships.
+    """Advance hyperspace / death-explosion particle animation for both ships.
 
-    Two-phase animation:
-      Phase 1 (ticks 1..HYPER_PHASE)   : particles expand outward from source.
+    Real hyperspace (ship.exps == 0 at HYPER_PHASE+1):
+      Phase 1 (ticks 1..HYPER_PHASE)        : particles expand outward from source.
       Phase 2 (ticks HYPER_PHASE+1..HYPER_DURATION): particles converge at destination.
-    At HYPER_DURATION the ship teleports to the pre-chosen destination.
+      At HYPER_DURATION: ship teleports to the pre-chosen destination.
+
+    Death explosion (ship.exps > 0 at HYPER_PHASE+1, set by handle_death):
+      Expansion only — no contraction, no teleport.  Particles drift until
+      reset_game_objects clears them when the ship's exps counter reaches 0.
     """
     import math as _math
     import random as _random
@@ -316,20 +320,22 @@ def _tick_hyperspace(state: GameState) -> None:
 
         flag += 1
 
-        if flag == HYPER_PHASE + 1:
-            # Transition to contraction: spawn particles around destination,
-            # pointing inward so they converge over the remaining HYPER_PHASE ticks.
+        ship = state.objects[ship_idx]
+        # ship.exps > 0 means handle_death triggered this, not a real jump.
+        is_death = (ship.exps > 0)
+
+        if flag == HYPER_PHASE + 1 and not is_death:
+            # Real hyperspace: switch to contraction phase.
             dest_x = float(getattr(state, dest_x_attr))
             dest_y = float(getattr(state, dest_y_attr))
             for i in range(HYPER_PARTICLES):
                 p = state.hyper_particles[p_start + i]
                 a = (i / HYPER_PARTICLES) * 2 * _math.pi
                 speed = _random.uniform(0.5, 2.5)
-                # Start spread out by speed × HYPER_PHASE, converge over HYPER_PHASE
                 r = speed * HYPER_PHASE
                 p.x = dest_x + _math.cos(a) * r
                 p.y = dest_y + _math.sin(a) * r * 0.5
-                p.vx = -_math.cos(a) * speed        # pointing inward
+                p.vx = -_math.cos(a) * speed
                 p.vy = -_math.sin(a) * speed * 0.5
                 p.active = True
         else:
@@ -339,9 +345,8 @@ def _tick_hyperspace(state: GameState) -> None:
                     p.x += p.vx
                     p.y += p.vy
 
-        if flag > HYPER_DURATION:
-            # Animation complete — place ship at destination
-            ship = state.objects[ship_idx]
+        if flag > HYPER_DURATION and not is_death:
+            # Real hyperspace complete — teleport ship to destination
             ship.x = getattr(state, dest_x_attr)
             ship.y = getattr(state, dest_y_attr)
             ship.vx = ship.vy = 0

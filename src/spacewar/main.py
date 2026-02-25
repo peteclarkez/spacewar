@@ -35,6 +35,7 @@ from .constants import (
     MODE_ATTRACT, MODE_PLAY,
     HYPER_DURATION,
     SHIP_EXPLOSION_TICKS,
+    HYPER_PARTICLES, HYPER_SOUND,
 )
 from .init import new_game_state, reset_game_objects, GameState
 from .stars import seed_random, generate_stars
@@ -54,11 +55,42 @@ from .attract import AttractState, run_attract_tick, draw_attract_screen
 # Death handling
 # ---------------------------------------------------------------------------
 
+def _launch_explosion_particles(state: GameState, ship_idx: int) -> None:
+    """Launch radial scatter particles for a ship death explosion.
+
+    Reuses the hyperspace particle infrastructure (hyper_particles slots and
+    hyper_*_flag).  Because ship.exps > 0 during the animation, _tick_hyperspace
+    can distinguish a death explosion from a real jump and skips the contraction
+    phase and teleport.
+    """
+    import math as _math
+    import random as _random
+
+    ship = state.objects[ship_idx]
+    p_start = 0 if ship_idx == ENT_OBJ else 32
+
+    # More particles spread over a wider speed range than hyperspace for drama
+    for i in range(HYPER_PARTICLES):
+        p = state.hyper_particles[p_start + i]
+        a = (i / HYPER_PARTICLES) * 2 * _math.pi
+        speed = _random.uniform(0.3, 3.5)
+        p.x = float(ship.x)
+        p.y = float(ship.y)
+        p.vx = _math.cos(a) * speed
+        p.vy = _math.sin(a) * speed * 0.5   # compressed for virtual Y aspect
+        p.active = True
+
+    if ship_idx == ENT_OBJ:
+        state.hyper_ent_flag = 1
+    else:
+        state.hyper_kln_flag = 1
+
+
 def handle_death(dead_idx: int, state: GameState) -> None:
-    """Start ship death explosion — score, sound, and begin animation.
+    """Start ship death explosion — score, sound, particles, begin animation.
 
     Does NOT reset objects or change mode; the game loop continues running so
-    the explosion plays out. The loop detects EFLG_INACTIVE and then resets.
+    the particle explosion plays out. The loop detects EFLG_INACTIVE and resets.
 
     Mirrors the death-handling section of MAIN.ASM.
     """
@@ -72,9 +104,12 @@ def handle_death(dead_idx: int, state: GameState) -> None:
     ship = state.objects[dead_idx]
     ship.eflg = EFLG_EXPLODING
     ship.exps = SHIP_EXPLOSION_TICKS
-    # Stop ship movement so the explosion stays centred
+    # Stop ship movement so particles expand symmetrically
     ship.vx = ship.vy = 0
     ship.vx_frac = ship.vy_frac = 0
+
+    # Launch hyperspace-style scatter particles for the explosion visual
+    _launch_explosion_particles(state, dead_idx)
 
 
 # ---------------------------------------------------------------------------

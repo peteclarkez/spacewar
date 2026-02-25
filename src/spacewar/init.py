@@ -217,6 +217,9 @@ def _reset_torpedo(obj: GameObject) -> None:
 def reset_game_objects(state: GameState) -> None:
     """Re-initialise all 16 object slots to starting conditions.
 
+    Also clears hyperspace/explosion particle state so no stale visual
+    artefacts carry across games.
+
     Mirrors INIT.ASM — called at the start of each new game and after death.
     """
     _reset_ship(state.objects[ENT_OBJ], ENT_START_X, ENT_START_Y, ENT_START_ANGLE)
@@ -225,6 +228,11 @@ def reset_game_objects(state: GameState) -> None:
         _reset_torpedo(state.objects[i])
     for i in range(9, 16):
         _reset_torpedo(state.objects[i])
+    # Clear particle animation state
+    state.hyper_ent_flag = 0
+    state.hyper_kln_flag = 0
+    for p in state.hyper_particles:
+        p.active = False
 
 
 def new_game_state() -> GameState:
