@@ -56,10 +56,11 @@ def _launch_torpedo(ship: GameObject, torp: GameObject) -> None:
     cos_val = cos_lookup(angle)   # ±32767 signed 16-bit
     sin_val = sin_lookup(angle)
 
-    # Position: spawn ~7 virtual pixels ahead of the ship centre.
-    # 32767 >> 12 = 7; negative cos/sin give negative offsets correctly.
-    torp.x = (ship.x + (cos_val >> 12)) % VIRTUAL_W
-    torp.y = (ship.y + (sin_val >> 12)) % VIRTUAL_H
+    # Position: spawn ~15 virtual pixels ahead of the ship centre.
+    # 32767 >> 11 = 15, which is safely beyond SHIP_TO_TORP_RANGE=8 so the
+    # torpedo does not immediately collide with the firing ship.
+    torp.x = (ship.x + (cos_val >> 11)) % VIRTUAL_W
+    torp.y = (ship.y + (sin_val >> 11)) % VIRTUAL_H
     torp.x_frac = ship.x_frac
     torp.y_frac = ship.y_frac
 

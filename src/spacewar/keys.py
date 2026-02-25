@@ -158,17 +158,25 @@ def _activate_hyperspace(state: GameState, ship_idx: int) -> None:
         state.hyper_kln_dest_y = dest_y
         state.hyper_kln_flag = 1
 
-    # Launch expansion particles from ship's current position
+    # Launch expansion particles.  Each particle has two velocity components:
+    #   translational — moves the whole cloud from source toward destination
+    #   radial        — expands outward during phase 1, contracts in phase 2
+    # The translational component carries the cloud across the screen so it
+    # reaches the midpoint at HYPER_PHASE and the destination at HYPER_DURATION.
     import math as _math
     particle_start = 0 if ship_idx == ENT_OBJ else 32
+    # Translational velocity: source → destination over HYPER_DURATION ticks
+    trans_vx = (dest_x - ship.x) / HYPER_DURATION
+    trans_vy = (dest_y - ship.y) / HYPER_DURATION
     for i in range(HYPER_PARTICLES):
         p = state.hyper_particles[particle_start + i]
         a = (i / HYPER_PARTICLES) * 2 * _math.pi
         speed = _random.uniform(0.5, 2.5)
         p.x = float(ship.x)
         p.y = float(ship.y)
-        p.vx = _math.cos(a) * speed
-        p.vy = _math.sin(a) * speed * 0.5   # virtual Y is compressed
+        # Velocity = translational drift + radial expansion
+        p.vx = trans_vx + _math.cos(a) * speed
+        p.vy = trans_vy + _math.sin(a) * speed * 0.5
         p.active = True
 
     state.sound_flag |= HYPER_SOUND

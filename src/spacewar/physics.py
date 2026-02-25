@@ -305,9 +305,6 @@ def _tick_hyperspace(state: GameState) -> None:
       Expansion only — no contraction, no teleport.  Particles drift until
       reset_game_objects clears them when the ship's exps counter reaches 0.
     """
-    import math as _math
-    import random as _random
-
     _slots = (
         ('hyper_ent_flag', 0,  ENT_OBJ, 'hyper_ent_dest_x', 'hyper_ent_dest_y'),
         ('hyper_kln_flag', 32, KLN_OBJ, 'hyper_kln_dest_x', 'hyper_kln_dest_y'),
@@ -326,18 +323,15 @@ def _tick_hyperspace(state: GameState) -> None:
 
         if flag == HYPER_PHASE + 1 and not is_death:
             # Real hyperspace: switch to contraction phase.
+            # Each particle's velocity is recalculated so it converges to the
+            # destination from its current position in exactly HYPER_PHASE ticks.
+            # The cloud is already at the midpoint so it arrives contracted at dest.
             dest_x = float(getattr(state, dest_x_attr))
             dest_y = float(getattr(state, dest_y_attr))
-            for i in range(HYPER_PARTICLES):
-                p = state.hyper_particles[p_start + i]
-                a = (i / HYPER_PARTICLES) * 2 * _math.pi
-                speed = _random.uniform(0.5, 2.5)
-                r = speed * HYPER_PHASE
-                p.x = dest_x + _math.cos(a) * r
-                p.y = dest_y + _math.sin(a) * r * 0.5
-                p.vx = -_math.cos(a) * speed
-                p.vy = -_math.sin(a) * speed * 0.5
-                p.active = True
+            for p in state.hyper_particles[p_start:p_start + HYPER_PARTICLES]:
+                if p.active:
+                    p.vx = (dest_x - p.x) / HYPER_PHASE
+                    p.vy = (dest_y - p.y) / HYPER_PHASE
         else:
             # Advance all active particles along their current velocity
             for p in state.hyper_particles[p_start:p_start + HYPER_PARTICLES]:
