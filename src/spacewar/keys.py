@@ -129,8 +129,9 @@ def _activate_hyperspace(state: GameState, ship_idx: int) -> None:
 
     Mirrors the hyperspace initiation in MAIN.ASM:
     - Deduct HYPERSPACE_ENERGY
-    - Launch 32 scatter particles
-    - Mark ship as exploding (hidden during travel)
+    - Choose a random destination now (so contraction phase knows where to go)
+    - Launch 32 expansion particles (scatter outward from source)
+    - Mark ship as exploding (hidden during transit)
     - Set hyper_*_flag to 1
     """
     ship = state.objects[ship_idx]
@@ -143,9 +144,22 @@ def _activate_hyperspace(state: GameState, ship_idx: int) -> None:
     ship.fire |= HYPER_FIRE_BIT
     ship.eflg = EFLG_EXPLODING   # hide ship during transit
 
-    # Launch scatter particles
-    import math as _math
+    # Pick random destination now (safe margin from wrap/edge)
     import random as _random
+    dest_x = _random.randint(WRAP_FACTOR + 16, VIRTUAL_W - WRAP_FACTOR - 16)
+    dest_y = _random.randint(WRAP_FACTOR + 16, VIRTUAL_H - WRAP_FACTOR - 16)
+
+    if ship_idx == ENT_OBJ:
+        state.hyper_ent_dest_x = dest_x
+        state.hyper_ent_dest_y = dest_y
+        state.hyper_ent_flag = 1
+    else:
+        state.hyper_kln_dest_x = dest_x
+        state.hyper_kln_dest_y = dest_y
+        state.hyper_kln_flag = 1
+
+    # Launch expansion particles from ship's current position
+    import math as _math
     particle_start = 0 if ship_idx == ENT_OBJ else 32
     for i in range(HYPER_PARTICLES):
         p = state.hyper_particles[particle_start + i]
@@ -154,15 +168,10 @@ def _activate_hyperspace(state: GameState, ship_idx: int) -> None:
         p.x = float(ship.x)
         p.y = float(ship.y)
         p.vx = _math.cos(a) * speed
-        p.vy = _math.sin(a) * speed
+        p.vy = _math.sin(a) * speed * 0.5   # virtual Y is compressed
         p.active = True
 
-    if ship_idx == ENT_OBJ:
-        state.hyper_ent_flag = 1
-        state.sound_flag |= HYPER_SOUND
-    else:
-        state.hyper_kln_flag = 1
-        state.sound_flag |= HYPER_SOUND
+    state.sound_flag |= HYPER_SOUND
 
 
 # ---------------------------------------------------------------------------

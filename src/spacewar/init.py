@@ -131,6 +131,12 @@ class GameState:
     hyper_ent_flag: int = 0
     hyper_kln_flag: int = 0
 
+    # Hyperspace destination (virtual coords), chosen at jump activation
+    hyper_ent_dest_x: int = 0
+    hyper_ent_dest_y: int = 0
+    hyper_kln_dest_x: int = 0
+    hyper_kln_dest_y: int = 0
+
     # 64 hyperspace particles: 0-31=Enterprise, 32-63=Klingon
     hyper_particles: list[HyperParticle] = field(
         default_factory=lambda: [HyperParticle() for _ in range(64)]

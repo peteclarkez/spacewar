@@ -44,6 +44,7 @@ from .constants import (
     AUTO_ENT_BIT, AUTO_KLN_BIT,
     GRAVITY_BIT, PLANET_BIT,
     LOW_SHIELD_LIMIT,
+    SHIP_EXPLOSION_TICKS,
 )
 from .init import GameState
 from .pictures import (
@@ -251,7 +252,7 @@ def draw_enterprise(surface: pygame.Surface, state: GameState) -> None:
     if ship.eflg == EFLG_INACTIVE:
         return
     if ship.eflg == EFLG_EXPLODING:
-        _draw_explosion(surface, ship)
+        _draw_explosion(surface, ship, exps_start=SHIP_EXPLOSION_TICKS, scale=3)
         return
     if ship.flags & CLOAK_BIT:
         return   # cloaked — invisible
@@ -269,7 +270,7 @@ def draw_klingon(surface: pygame.Surface, state: GameState) -> None:
     if ship.eflg == EFLG_INACTIVE:
         return
     if ship.eflg == EFLG_EXPLODING:
-        _draw_explosion(surface, ship)
+        _draw_explosion(surface, ship, exps_start=SHIP_EXPLOSION_TICKS, scale=3)
         return
     if ship.flags & CLOAK_BIT:
         return
@@ -299,12 +300,56 @@ def draw_torpedoes(surface: pygame.Surface, state: GameState) -> None:
             _draw_explosion(surface, obj)
 
 
-def _draw_explosion(surface: pygame.Surface, obj) -> None:
-    """Draw explosion animation frame for an object."""
-    frame_idx = 7 - max(0, obj.exps - 1)   # counts down: exps=8→frame0, exps=1→frame7
-    frame_idx = max(0, min(7, frame_idx))
+def _draw_sprite_scaled(
+    surface: pygame.Surface,
+    bitmap: list[int],
+    cx: int,
+    cy: int,
+    color: tuple,
+    scale: int,
+) -> None:
+    """Draw an 8×8 bitmap at (scale)× magnification, centred at virtual (cx, cy).
+
+    Each source bit becomes a scale×scale block of screen pixels.
+    """
+    half = 4 * scale            # half-size for centring
+    sx0 = cx - half
+    sy0 = cy * Y_SCALE - half
+    for row_idx, row_bits in enumerate(bitmap):
+        if row_bits == 0:
+            continue
+        for bit in range(8):
+            if row_bits & (1 << (7 - bit)):
+                for dr in range(scale):
+                    sy = sy0 + row_idx * scale + dr
+                    if sy < 0 or sy >= SCREEN_H:
+                        continue
+                    for dc in range(scale):
+                        sx = sx0 + bit * scale + dc
+                        if 0 <= sx < SCREEN_W:
+                            surface.set_at((sx, sy), color)
+
+
+def _draw_explosion(
+    surface: pygame.Surface,
+    obj,
+    exps_start: int = 8,
+    scale: int = 1,
+) -> None:
+    """Draw explosion animation frame for an object.
+
+    Args:
+        exps_start : initial exps value when explosion began (8 for torps,
+                     SHIP_EXPLOSION_TICKS for ships).
+        scale      : pixel scale factor (1 for torps, 3 for ships).
+    """
+    elapsed = exps_start - max(0, obj.exps)
+    frame_idx = min(7, (elapsed * 8) // exps_start)
     bitmap = get_explosion_frame(frame_idx)
-    draw_sprite(surface, bitmap, obj.x, obj.y, _WHITE)
+    if scale == 1:
+        draw_sprite(surface, bitmap, obj.x, obj.y, _WHITE)
+    else:
+        _draw_sprite_scaled(surface, bitmap, obj.x, obj.y, _WHITE, scale)
 
 
 # ---------------------------------------------------------------------------

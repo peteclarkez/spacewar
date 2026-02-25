@@ -34,6 +34,7 @@ from .constants import (
     EXPLOSION_SOUND,
     MODE_ATTRACT, MODE_PLAY,
     HYPER_DURATION,
+    SHIP_EXPLOSION_TICKS,
 )
 from .init import new_game_state, reset_game_objects, GameState
 from .stars import seed_random, generate_stars
@@ -54,7 +55,10 @@ from .attract import AttractState, run_attract_tick, draw_attract_screen
 # ---------------------------------------------------------------------------
 
 def handle_death(dead_idx: int, state: GameState) -> None:
-    """Handle a ship death — increment score, reset objects, return to attract.
+    """Start ship death explosion — score, sound, and begin animation.
+
+    Does NOT reset objects or change mode; the game loop continues running so
+    the explosion plays out. The loop detects EFLG_INACTIVE and then resets.
 
     Mirrors the death-handling section of MAIN.ASM.
     """
@@ -63,19 +67,14 @@ def handle_death(dead_idx: int, state: GameState) -> None:
     else:
         state.enterprise_score += 1
 
-    # Trigger explosion sound
     state.sound_flag |= EXPLOSION_SOUND
 
-    # Mark the dead ship as exploding (let the explosion animation play)
     ship = state.objects[dead_idx]
     ship.eflg = EFLG_EXPLODING
-    ship.exps = 8
-
-    # After a short delay, transition to attract mode (simplified: immediate)
-    # A more faithful implementation would wait for the explosion to finish.
-    # Reset objects and switch to attract mode.
-    reset_game_objects(state)
-    state.game_mode = MODE_ATTRACT
+    ship.exps = SHIP_EXPLOSION_TICKS
+    # Stop ship movement so the explosion stays centred
+    ship.vx = ship.vy = 0
+    ship.vx_frac = ship.vy_frac = 0
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +103,9 @@ def main() -> None:
     # Attract mode state
     attract = AttractState()
 
+    # Track which ship is currently playing its death explosion (-1 = none)
+    pending_death: int = -1
+
     running = True
     while running:
         clock.tick(TARGET_FPS)
@@ -120,6 +122,7 @@ def main() -> None:
 
         # --- Attract mode ---
         if state.game_mode == MODE_ATTRACT:
+            pending_death = -1
             mode = run_attract_tick(state, attract, screen, key_state)
             # Function keys active during attract
             process_function_keys(state, key_state)
@@ -129,6 +132,15 @@ def main() -> None:
             continue
 
         # --- Play mode ---
+
+        # If a death explosion finished, now reset and switch to attract
+        if pending_death >= 0:
+            ship = state.objects[pending_death]
+            if ship.eflg == EFLG_INACTIVE:
+                reset_game_objects(state)
+                state.game_mode = MODE_ATTRACT
+                pending_death = -1
+                continue
 
         # Phaser erase must happen at tick PHASER_ERASE (before new draw)
         ent = state.objects[ENT_OBJ]
@@ -142,27 +154,24 @@ def main() -> None:
             kln.phaser_state -= 1
 
         # Key / AI processing (pass screen so phasers can be drawn)
-        process_enterprise_keys(state, key_state, screen)
-        process_klingon_keys(state, key_state, screen)
+        # Skip input during death explosion so the ship can't be controlled
+        if pending_death < 0:
+            process_enterprise_keys(state, key_state, screen)
+            process_klingon_keys(state, key_state, screen)
         process_function_keys(state, key_state)
 
-        # Physics tick
+        # Physics tick (also decrements exps for all exploding objects)
         run_physics_tick(state)
 
-        # Collision detection
-        check_all_collisions(state)
+        # Collision detection (skip while death explosion is playing)
+        if pending_death < 0:
+            check_all_collisions(state)
 
-        # Death check
-        dead = check_death(state)
-        if dead >= 0:
-            handle_death(dead, state)
-            # Render one more frame to show the explosion
-            draw_game_frame(screen, bg, state)
-            draw_energy_bars(screen, state)
-            draw_function_keys(screen, state)
-            pygame.display.flip()
-            pygame.time.wait(800)
-            continue
+            # Death check — only trigger once per death
+            dead = check_death(state)
+            if dead >= 0:
+                handle_death(dead, state)
+                pending_death = dead
 
         # Sound
         tick_sound(state, sounds)

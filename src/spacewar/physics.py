@@ -38,7 +38,7 @@ from .constants import (
     PHASER_IDLE, PHASER_ERASE,
     STARTING_ENERGY,
     WARNING_SOUND, LOW_SHIELD_LIMIT,
-    HYPER_DURATION,
+    HYPER_DURATION, HYPER_PHASE, HYPER_PARTICLES,
 )
 from .trig import cos_lookup, sin_lookup
 from .gravity import update_gravity_all
@@ -294,35 +294,62 @@ def _tick_planet_animation(state: GameState) -> None:
 # ---------------------------------------------------------------------------
 
 def _tick_hyperspace(state: GameState) -> None:
-    """Advance hyperspace particle animation for both ships."""
+    """Advance hyperspace particle animation for both ships.
+
+    Two-phase animation:
+      Phase 1 (ticks 1..HYPER_PHASE)   : particles expand outward from source.
+      Phase 2 (ticks HYPER_PHASE+1..HYPER_DURATION): particles converge at destination.
+    At HYPER_DURATION the ship teleports to the pre-chosen destination.
+    """
+    import math as _math
     import random as _random
 
-    for flag_attr, particle_start in (('hyper_ent_flag', 0), ('hyper_kln_flag', 32)):
+    _slots = (
+        ('hyper_ent_flag', 0,  ENT_OBJ, 'hyper_ent_dest_x', 'hyper_ent_dest_y'),
+        ('hyper_kln_flag', 32, KLN_OBJ, 'hyper_kln_dest_x', 'hyper_kln_dest_y'),
+    )
+
+    for flag_attr, p_start, ship_idx, dest_x_attr, dest_y_attr in _slots:
         flag = getattr(state, flag_attr)
         if flag == 0:
             continue
 
-        # Advance particles
-        for p in state.hyper_particles[particle_start:particle_start + 32]:
-            if not p.active:
-                continue
-            p.x += p.vx
-            p.y += p.vy
-
         flag += 1
+
+        if flag == HYPER_PHASE + 1:
+            # Transition to contraction: spawn particles around destination,
+            # pointing inward so they converge over the remaining HYPER_PHASE ticks.
+            dest_x = float(getattr(state, dest_x_attr))
+            dest_y = float(getattr(state, dest_y_attr))
+            for i in range(HYPER_PARTICLES):
+                p = state.hyper_particles[p_start + i]
+                a = (i / HYPER_PARTICLES) * 2 * _math.pi
+                speed = _random.uniform(0.5, 2.5)
+                # Start spread out by speed × HYPER_PHASE, converge over HYPER_PHASE
+                r = speed * HYPER_PHASE
+                p.x = dest_x + _math.cos(a) * r
+                p.y = dest_y + _math.sin(a) * r * 0.5
+                p.vx = -_math.cos(a) * speed        # pointing inward
+                p.vy = -_math.sin(a) * speed * 0.5
+                p.active = True
+        else:
+            # Advance all active particles along their current velocity
+            for p in state.hyper_particles[p_start:p_start + HYPER_PARTICLES]:
+                if p.active:
+                    p.x += p.vx
+                    p.y += p.vy
+
         if flag > HYPER_DURATION:
-            # Animation over — teleport the ship
-            flag = 0
-            ship_idx = ENT_OBJ if particle_start == 0 else 8  # KLN_OBJ
+            # Animation complete — place ship at destination
             ship = state.objects[ship_idx]
-            # Arrive at random position with zero velocity
-            ship.x = _random.randint(WRAP_FACTOR + 16, VIRTUAL_W - WRAP_FACTOR - 16)
-            ship.y = _random.randint(WRAP_FACTOR + 16, VIRTUAL_H - WRAP_FACTOR - 16)
+            ship.x = getattr(state, dest_x_attr)
+            ship.y = getattr(state, dest_y_attr)
             ship.vx = ship.vy = 0
             ship.vx_frac = ship.vy_frac = 0
             ship.eflg = EFLG_ACTIVE
-            for p in state.hyper_particles[particle_start:particle_start + 32]:
+            for p in state.hyper_particles[p_start:p_start + HYPER_PARTICLES]:
                 p.active = False
+            flag = 0
 
         setattr(state, flag_attr, flag)
 
