@@ -32,6 +32,7 @@ from .constants import (
     ATTRACT_PLANET_X, ATTRACT_PLANET_Y,
     AUTO_ENT_BIT, AUTO_KLN_BIT,
     PLANET_BIT, GRAVITY_BIT,
+    PLANET_TIME,
 )
 
 
@@ -65,6 +66,12 @@ def run_attract_tick(
     if attract.screen_timer >= ATTRACT_CYCLE_TIME:
         attract.screen_timer = 0
         attract.screen_index = (attract.screen_index + 1) % ATTRACT_SCREENS
+
+    # Advance the blink counter and planet animation (run_physics_tick is not
+    # called in attract mode, so we drive timing here instead).
+    state.blink = (state.blink + 1) & 0xFF
+    if (state.blink & (PLANET_TIME - 1)) == 0:
+        state.planet_state = (state.planet_state + 1) & 0x0F
 
     # F2 starts the game
     if key_state.just_pressed.get(pygame.K_F2):
@@ -212,7 +219,11 @@ def _draw_user_supported(surface: pygame.Surface) -> None:
 
 
 def _draw_attract_planet(surface: pygame.Surface, state) -> None:
-    """Draw animated planet in top-right corner (attract mode position)."""
+    """Draw animated planet in top-right corner (attract mode position).
+
+    The frame has 8 virtual rows; each virtual row maps to 2 screen rows
+    (Y_SCALE=2), producing a 16×16 screen-pixel circle.
+    """
     from .pictures import get_planet_frame
     frame = get_planet_frame(state.planet_state)
     px = ATTRACT_PLANET_X - 8
@@ -221,7 +232,7 @@ def _draw_attract_planet(surface: pygame.Surface, state) -> None:
         for bit in range(16):
             if row & (1 << (15 - bit)):
                 sx = px + bit
-                sy = (py + row_idx) * 2   # Y_SCALE = 2
+                sy = py * 2 + row_idx * 2   # virtual row → 2 screen rows
                 if 0 <= sx < SCREEN_W and 0 <= sy < SCREEN_H:
                     surface.set_at((sx, sy), _WHITE)
                     if sy + 1 < SCREEN_H:

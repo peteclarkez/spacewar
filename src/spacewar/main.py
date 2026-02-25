@@ -40,7 +40,10 @@ from .stars import seed_random, generate_stars
 from .keys import KeyState, update_key_state, process_enterprise_keys, process_klingon_keys, process_function_keys
 from .physics import run_physics_tick
 from .collision import check_all_collisions, check_death
-from .phaser import erase_phaser_enterprise, erase_phaser_klingon
+from .phaser import (
+    erase_phaser_enterprise, erase_phaser_klingon,
+    redraw_phaser_enterprise, redraw_phaser_klingon,
+)
 from .sound import init_sound, tick_sound
 from .draw import draw_game_frame, draw_energy_bars, draw_function_keys, create_background
 from .attract import AttractState, run_attract_tick, draw_attract_screen
@@ -133,8 +136,10 @@ def main() -> None:
 
         if ent.phaser_state == PHASER_ERASE:
             erase_phaser_enterprise(state, screen)
+            ent.phaser_state -= 1   # advance past PHASER_ERASE; physics skips it
         if kln.phaser_state == PHASER_ERASE:
             erase_phaser_klingon(state, screen)
+            kln.phaser_state -= 1
 
         # Key / AI processing (pass screen so phasers can be drawn)
         process_enterprise_keys(state, key_state, screen)
@@ -164,6 +169,9 @@ def main() -> None:
 
         # Draw
         draw_game_frame(screen, bg, state)
+        # Restore phaser beams wiped by the background blit
+        redraw_phaser_enterprise(state, screen)
+        redraw_phaser_klingon(state, screen)
         draw_energy_bars(screen, state)
         draw_function_keys(screen, state)
 

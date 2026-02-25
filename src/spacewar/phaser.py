@@ -33,7 +33,7 @@ import pygame
 from .constants import (
     ENT_OBJ, KLN_OBJ,
     EFLG_ACTIVE, EFLG_EXPLODING,
-    PHASER_IDLE, PHASER_DELAY, PHASER_RANGE,
+    PHASER_IDLE, PHASER_DELAY, PHASER_ERASE, PHASER_RANGE,
     PHASER_TO_OBJ_RANGE, PHASER_DAMAGE, PHASER_FIRE_ENERGY,
     PHASER_SOUND, PLANET_BIT,
     PLANET_X, PLANET_Y, PLANET_RANGE,
@@ -58,6 +58,7 @@ def _draw_phaser_ray(
     surface: pygame.Surface,
     ship_idx: int,
     compare: bool,
+    color: tuple | None = None,
 ) -> int:
     """Step along the phaser ray, drawing pixels and optionally checking hits.
 
@@ -93,7 +94,8 @@ def _draw_phaser_ray(
     dx = cos_lookup(oa) / 32767.0   # normalised to ±1.0
     dy = sin_lookup(oa) / 32767.0
 
-    color = PHASER_COLOR if compare else (0, 0, 0)
+    if color is None:
+        color = PHASER_COLOR if compare else (0, 0, 0)
 
     rx = float(ox)
     ry = float(oy)
@@ -207,3 +209,30 @@ def fire_phaser_klingon(state: GameState, surface: pygame.Surface) -> None:
 def erase_phaser_klingon(state: GameState, surface: pygame.Surface) -> None:
     """Erase Klingon phaser beam (replay ray in black).  Mirrors Erase_Phaser."""
     _draw_phaser_ray(state, surface, KLN_OBJ, compare=False)
+
+
+# ---------------------------------------------------------------------------
+# Redraw helpers — called each frame after background blit to restore beam
+# ---------------------------------------------------------------------------
+
+def redraw_phaser_enterprise(state: GameState, surface: pygame.Surface) -> None:
+    """Redraw the Enterprise phaser beam in white (after the background blit erased it).
+
+    Only draws when phaser_state is in the visible window (PHASER_ERASE < state < PHASER_IDLE).
+    Uses the saved origin/angle/count so the ray is pixel-identical to the original.
+    No hit detection is performed.
+    """
+    ship = state.objects[ENT_OBJ]
+    ps = ship.phaser_state
+    if ps == PHASER_IDLE or ps <= PHASER_ERASE:
+        return
+    _draw_phaser_ray(state, surface, ENT_OBJ, compare=False, color=PHASER_COLOR)
+
+
+def redraw_phaser_klingon(state: GameState, surface: pygame.Surface) -> None:
+    """Redraw the Klingon phaser beam in white (after the background blit erased it)."""
+    ship = state.objects[KLN_OBJ]
+    ps = ship.phaser_state
+    if ps == PHASER_IDLE or ps <= PHASER_ERASE:
+        return
+    _draw_phaser_ray(state, surface, KLN_OBJ, compare=False, color=PHASER_COLOR)

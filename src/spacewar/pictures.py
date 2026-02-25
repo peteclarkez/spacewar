@@ -33,36 +33,34 @@ _SPRITE_SIZE = 8          # 8×8 pixels
 
 
 def _make_ship_bitmap(angle_256: int, facing: str = 'triangle') -> list[int]:
-    """Generate an 8×8 ship sprite for the given 256-step angle.
+    """Generate an 8×8 Enterprise sprite for the given 256-step angle.
 
-    The ship is drawn as a small arrow/triangle pointing in the given direction.
+    Base shape points RIGHT (angle=0): fish/arrow with nacelles at the rear.
+    Bit layout: MSB (0x80) = leftmost screen pixel, LSB (0x01) = rightmost.
+    With centre cx=3.5, col vx = cx-4+bit, so:
+      0x60 → cols cx-3, cx-2 (rear nacelles)
+      0x7C → cols cx-3..cx+1 (tapered hull)
+      0x7F → cols cx-3..cx+3 (full hull, rightmost = nose)
+
     # TODO: transcribe exact bitmaps from PICT8.ASM for pixel-perfect fidelity.
     """
-    # Base Enterprise shape (pointing right, angle=0):
-    # Row 0:  00010000  = 0x10
-    # Row 1:  00111000  = 0x38
-    # Row 2:  01111100  = 0x7C
-    # Row 3:  11111110  = 0xFE
-    # Row 4:  01111100  = 0x7C
-    # Row 5:  00111000  = 0x38
-    # Row 6:  00010000  = 0x10
-    # Row 7:  00000000  = 0x00
-    base_ent = [0x10, 0x38, 0x7C, 0xFE, 0x7C, 0x38, 0x10, 0x00]
-
-    # Convert from 256-step angle to degrees (0=right, CCW positive in maths)
-    # In game: angle increases CW on screen (y-down), so angle_deg = angle_256 * 360/256
+    # Enterprise pointing right: elongated body, wider nacelles at rear
+    base_ent = [0x00, 0x60, 0x7C, 0x7F, 0x7C, 0x60, 0x00, 0x00]
     angle_deg = angle_256 * 360.0 / 256.0
-
     return _rotate_bitmap(base_ent, angle_deg)
 
 
 def _make_klingon_bitmap(angle_256: int) -> list[int]:
     """Generate an 8×8 Klingon ship sprite.
 
+    Base shape points RIGHT (angle=0): bird-of-prey with wide swept-back wings.
+      0xF0 → cols cx-4..cx-1 (wide wings at rear, 4 pixels)
+      0x7E → cols cx-3..cx+2 (body)
+      0x7F → cols cx-3..cx+3 (full hull, rightmost = nose)
+
     # TODO: transcribe exact bitmaps from PICT8.ASM for pixel-perfect fidelity.
     """
-    # Base Klingon shape (pointing right) — wider/flatter than Enterprise
-    base_kln = [0x00, 0x18, 0x3C, 0xFF, 0xFF, 0x3C, 0x18, 0x00]
+    base_kln = [0x00, 0xF0, 0x7E, 0x7F, 0x7E, 0xF0, 0x00, 0x00]
     angle_deg = angle_256 * 360.0 / 256.0
     return _rotate_bitmap(base_kln, angle_deg)
 
@@ -153,23 +151,40 @@ def get_explosion_frame(n: int) -> list[int]:
 # ---------------------------------------------------------------------------
 
 def _make_planet_frame(frame: int) -> list[int]:
-    """Generate one animated planet frame (16×16 bitmap).
+    """Generate one animated planet frame: 16 columns × 8 virtual rows.
 
-    The planet rotates with a crescent highlight that moves across.
+    With Y_SCALE=2 each virtual row is drawn as 2 screen rows, so the bitmap
+    renders as 16×16 screen pixels — a circle, not a tall oval.
+
+    The circle equation in screen-pixel space is:
+        dx² + (dy * Y_SCALE)² ≤ r²
+    where dx = x - cx (pixels) and dy = y - cy (virtual rows).
+    This is equivalent to: dx² + 4·dy² ≤ r².
+
+    A crescent shadow moves left-to-right across 16 frames, simulating rotation.
+
     # TODO: transcribe exact data from PICTURES.ASM / PLANET.ASM.
     """
     rows = []
-    # Draw a filled circle of radius 7, with a crescent shadow offset by frame
-    cx = cy = 7.5
-    radius = 7.0
-    shadow_offset = (frame - 8) * 0.5   # crescent moves left→right
-    for y in range(16):
+    cx = 7.5          # horizontal centre (between col 7 and 8)
+    cy = 3.5          # vertical centre (between row 3 and 4)
+    r = 7.5           # screen-pixel radius
+
+    # Shadow circle: same shape, slightly smaller, offset horizontally
+    # frame 0  → shadow far left  → right crescent lit
+    # frame 8  → shadow centred   → thin ring lit
+    # frame 15 → shadow far right → left crescent lit
+    shadow_x = cx + (frame / 15.0 - 0.5) * (r * 1.2)
+    shadow_r = r * 0.82
+
+    for y in range(8):
         row = 0
         for x in range(16):
             dx = x - cx
             dy = y - cy
-            in_planet = (dx * dx + dy * dy) <= radius * radius
-            in_shadow = ((dx - shadow_offset) ** 2 + dy * dy) <= (radius * 0.8) ** 2
+            in_planet = (dx * dx + 4 * dy * dy) <= r * r
+            sdx = x - shadow_x
+            in_shadow = (sdx * sdx + 4 * dy * dy) <= shadow_r * shadow_r
             if in_planet and not in_shadow:
                 row |= (1 << (15 - x))
         rows.append(row)

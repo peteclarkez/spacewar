@@ -101,7 +101,9 @@ def draw_sprite(
 ) -> None:
     """Draw an 8×8 bitmask sprite centred on virtual (cx, cy).
 
-    Each row is drawn as Y_SCALE screen rows.
+    Each bit is rendered as 2 horizontal virtual pixels so the sprite occupies
+    16×8 virtual → 16×16 screen pixels (square, not a tall sliver).
+    Each row is also drawn as Y_SCALE screen rows via put_pixel.
     Bit 7 of each row byte = leftmost pixel.
     """
     for row_idx, row_bits in enumerate(bitmap):
@@ -110,8 +112,9 @@ def draw_sprite(
             continue
         for bit in range(8):
             if row_bits & (1 << (7 - bit)):
-                vx = cx - 4 + bit
-                put_pixel(surface, vx, vy, color)
+                vx = cx - 8 + bit * 2   # 2× horizontal scale; centred at cx
+                put_pixel(surface, vx,     vy, color)
+                put_pixel(surface, vx + 1, vy, color)
 
 
 def erase_sprite(
