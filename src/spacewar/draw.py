@@ -48,6 +48,7 @@ from .constants import (
 from .init import GameState
 from .pictures import (
     get_enterprise_sprite, get_klingon_sprite,
+    get_enterprise_torp_sprite, get_klingon_torp_sprite,
     get_explosion_frame, get_planet_frame,
 )
 
@@ -91,6 +92,39 @@ def put_pixel(surface: pygame.Surface, vx: int, vy: int, color: tuple) -> None:
 # ---------------------------------------------------------------------------
 # Sprite renderer
 # ---------------------------------------------------------------------------
+# All sprites from PICT16.ASM were designed for CGA square pixels.
+# We render them at 1:1 screen pixels, centred at screen (vx, vy*Y_SCALE).
+# This gives correct proportions regardless of the virtual Y-scale factor.
+
+def _blit_sprite(
+    surface: pygame.Surface,
+    bitmap: list[int],
+    n_bits: int,
+    sx0: int,
+    sy0: int,
+    color: tuple,
+) -> None:
+    """Core 1:1 sprite blitter.  Draws bitmap rows at direct screen coords.
+
+    Args:
+        bitmap : list of row bitmasks (MSB = leftmost pixel)
+        n_bits : pixel width of each row (8 for small sprites, 16 for ships)
+        sx0    : screen x of leftmost pixel in row 0
+        sy0    : screen y of row 0
+        color  : RGB tuple
+    """
+    w = SCREEN_W
+    h = SCREEN_H
+    for row_idx, row_bits in enumerate(bitmap):
+        sy = sy0 + row_idx
+        if row_bits == 0 or sy < 0 or sy >= h:
+            continue
+        for bit in range(n_bits):
+            if row_bits & (1 << (n_bits - 1 - bit)):
+                sx = sx0 + bit
+                if 0 <= sx < w:
+                    surface.set_at((sx, sy), color)
+
 
 def draw_sprite(
     surface: pygame.Surface,
@@ -99,32 +133,31 @@ def draw_sprite(
     cy: int,
     color: tuple,
 ) -> None:
-    """Draw an 8×8 bitmask sprite centred on virtual (cx, cy).
+    """Draw an 8×8 sprite (explosions, torpedoes) centred at virtual (cx, cy).
 
-    Each bit is rendered as 2 horizontal virtual pixels so the sprite occupies
-    16×8 virtual → 16×16 screen pixels (square, not a tall sliver).
-    Each row is also drawn as Y_SCALE screen rows via put_pixel.
+    Rendered at 1:1 screen pixels; sprite is 8×8 on screen.
     Bit 7 of each row byte = leftmost pixel.
     """
-    for row_idx, row_bits in enumerate(bitmap):
-        vy = cy - 4 + row_idx
-        if row_bits == 0:
-            continue
-        for bit in range(8):
-            if row_bits & (1 << (7 - bit)):
-                vx = cx - 8 + bit * 2   # 2× horizontal scale; centred at cx
-                put_pixel(surface, vx,     vy, color)
-                put_pixel(surface, vx + 1, vy, color)
+    sx0 = cx - 4
+    sy0 = cy * Y_SCALE - 4
+    _blit_sprite(surface, bitmap, 8, sx0, sy0, color)
 
 
-def erase_sprite(
+def draw_ship_sprite(
     surface: pygame.Surface,
     bitmap: list[int],
     cx: int,
     cy: int,
+    color: tuple,
 ) -> None:
-    """Erase an 8×8 sprite by drawing black over it."""
-    draw_sprite(surface, bitmap, cx, cy, _BLACK)
+    """Draw a 16×16 ship sprite centred at virtual (cx, cy).
+
+    Rendered at 1:1 screen pixels; sprite is 16×16 on screen.
+    Bit 15 of each row word = leftmost pixel.
+    """
+    sx0 = cx - 8
+    sy0 = cy * Y_SCALE - 8
+    _blit_sprite(surface, bitmap, 16, sx0, sy0, color)
 
 
 # ---------------------------------------------------------------------------
@@ -150,22 +183,48 @@ def create_background(stars: list[tuple[int, int]]) -> pygame.Surface:
 # ---------------------------------------------------------------------------
 
 def draw_planet(surface: pygame.Surface, state: GameState, attract: bool = False) -> None:
-    """Draw animated planet at centre (game) or top-right (attract)."""
+    """Draw animated planet centred on its position.
+
+    The PICT16.ASM bitmap is 32 rows × 32 bits, designed for CGA 640×200 where
+    each scan line is displayed ~2× taller on a 4:3 monitor (pixel aspect ~2.4:1).
+
+    Game mode  — all 32 rows rendered via put_pixel (Y_SCALE=2).  The circular
+                 body spans 16 rows × 2 screen pixels = 32 screen pixels tall,
+                 32 screen pixels wide → correct circular proportions.  The
+                 planetary ring adds a further ~6 screen pixels above and below.
+
+    Attract mode — all 32 rows rendered at 1:1 screen pixels, all 32 bits tested
+                   correctly.  Planet is 32×32 screen pixels in the top-right corner.
+    """
+    frame = get_planet_frame(state.planet_state)
+
     if attract:
         from .constants import ATTRACT_PLANET_X, ATTRACT_PLANET_Y
-        px = ATTRACT_PLANET_X - 8
-        py = ATTRACT_PLANET_Y
+        # 32×32 at 1:1; centred at virtual (ATTRACT_PLANET_X, ATTRACT_PLANET_Y).
+        # All 32 bits of each row tested — no clipping.
+        sx0 = ATTRACT_PLANET_X - 16
+        sy0 = ATTRACT_PLANET_Y * Y_SCALE - 16
+        for row_idx, row in enumerate(frame):
+            if row == 0:
+                continue
+            sy = sy0 + row_idx
+            if sy < 0 or sy >= SCREEN_H:
+                continue
+            for bit in range(32):
+                if row & (1 << (31 - bit)):
+                    sx = sx0 + bit
+                    if 0 <= sx < SCREEN_W:
+                        surface.set_at((sx, sy), _PLANET_COLOR)
     else:
-        px = PLANET_X - 8
-        py = PLANET_Y - 8
-
-    frame = get_planet_frame(state.planet_state)
-    for row_idx, row in enumerate(frame):
-        for bit in range(16):
-            if row & (1 << (15 - bit)):
-                vx = px + bit
-                vy = py + row_idx
-                put_pixel(surface, vx, vy, _PLANET_COLOR)
+        # All 32 rows via put_pixel — body (rows 8-23) becomes 32 × 32 screen px.
+        for row_idx, row in enumerate(frame):
+            if row == 0:
+                continue
+            vy = PLANET_Y - 16 + row_idx
+            for bit in range(32):
+                if row & (1 << (31 - bit)):
+                    vx = PLANET_X - 16 + bit
+                    put_pixel(surface, vx, vy, _PLANET_COLOR)
 
 
 # ---------------------------------------------------------------------------
@@ -173,7 +232,7 @@ def draw_planet(surface: pygame.Surface, state: GameState, attract: bool = False
 # ---------------------------------------------------------------------------
 
 def draw_enterprise(surface: pygame.Surface, state: GameState) -> None:
-    """Draw Enterprise ship."""
+    """Draw Enterprise ship (16×16 sprite from PICT16.ASM)."""
     ship = state.objects[ENT_OBJ]
     if ship.eflg == EFLG_INACTIVE:
         return
@@ -183,7 +242,7 @@ def draw_enterprise(surface: pygame.Surface, state: GameState) -> None:
     if ship.flags & CLOAK_BIT:
         return   # cloaked — invisible
     bitmap = get_enterprise_sprite(ship.angle)
-    draw_sprite(surface, bitmap, ship.x, ship.y, _ENT_COLOR)
+    draw_ship_sprite(surface, bitmap, ship.x, ship.y, _ENT_COLOR)
     ship.x_drawn = ship.x
     ship.y_drawn = ship.y
     ship.angle_drawn = ship.angle
@@ -191,7 +250,7 @@ def draw_enterprise(surface: pygame.Surface, state: GameState) -> None:
 
 
 def draw_klingon(surface: pygame.Surface, state: GameState) -> None:
-    """Draw Klingon ship."""
+    """Draw Klingon ship (16×16 sprite from PICT16.ASM)."""
     ship = state.objects[KLN_OBJ]
     if ship.eflg == EFLG_INACTIVE:
         return
@@ -201,7 +260,7 @@ def draw_klingon(surface: pygame.Surface, state: GameState) -> None:
     if ship.flags & CLOAK_BIT:
         return
     bitmap = get_klingon_sprite(ship.angle)
-    draw_sprite(surface, bitmap, ship.x, ship.y, _KLN_COLOR)
+    draw_ship_sprite(surface, bitmap, ship.x, ship.y, _KLN_COLOR)
     ship.x_drawn = ship.x
     ship.y_drawn = ship.y
     ship.angle_drawn = ship.angle
@@ -209,11 +268,19 @@ def draw_klingon(surface: pygame.Surface, state: GameState) -> None:
 
 
 def draw_torpedoes(surface: pygame.Surface, state: GameState) -> None:
-    """Draw all active torpedoes as single pixels."""
-    for i in list(range(ENT_TORP_START, ENT_TORP_END)) + list(range(KLN_TORP_START, KLN_TORP_END)):
+    """Draw all active torpedoes using angle-specific sprites from PICT16.ASM."""
+    for i in range(ENT_TORP_START, ENT_TORP_END):
         obj = state.objects[i]
         if obj.eflg == EFLG_ACTIVE:
-            put_pixel(surface, obj.x, obj.y, _TORP_COLOR)
+            bitmap = get_enterprise_torp_sprite(obj.angle)
+            draw_sprite(surface, bitmap, obj.x, obj.y, _TORP_COLOR)
+        elif obj.eflg == EFLG_EXPLODING:
+            _draw_explosion(surface, obj)
+    for i in range(KLN_TORP_START, KLN_TORP_END):
+        obj = state.objects[i]
+        if obj.eflg == EFLG_ACTIVE:
+            bitmap = get_klingon_torp_sprite(obj.angle)
+            draw_sprite(surface, bitmap, obj.x, obj.y, _TORP_COLOR)
         elif obj.eflg == EFLG_EXPLODING:
             _draw_explosion(surface, obj)
 

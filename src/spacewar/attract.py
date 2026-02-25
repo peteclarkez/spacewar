@@ -221,19 +221,8 @@ def _draw_user_supported(surface: pygame.Surface) -> None:
 def _draw_attract_planet(surface: pygame.Surface, state) -> None:
     """Draw animated planet in top-right corner (attract mode position).
 
-    The frame has 8 virtual rows; each virtual row maps to 2 screen rows
-    (Y_SCALE=2), producing a 16×16 screen-pixel circle.
+    Delegates to draw.draw_planet with attract=True, which renders a 16×16
+    scaled-down view of the 32×32 PICT16 planet bitmap.
     """
-    from .pictures import get_planet_frame
-    frame = get_planet_frame(state.planet_state)
-    px = ATTRACT_PLANET_X - 8
-    py = ATTRACT_PLANET_Y
-    for row_idx, row in enumerate(frame):
-        for bit in range(16):
-            if row & (1 << (15 - bit)):
-                sx = px + bit
-                sy = py * 2 + row_idx * 2   # virtual row → 2 screen rows
-                if 0 <= sx < SCREEN_W and 0 <= sy < SCREEN_H:
-                    surface.set_at((sx, sy), _WHITE)
-                    if sy + 1 < SCREEN_H:
-                        surface.set_at((sx, sy + 1), _WHITE)
+    from .draw import draw_planet
+    draw_planet(surface, state, attract=True)
