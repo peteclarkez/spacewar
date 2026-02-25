@@ -155,9 +155,11 @@ MODE_PLAY: int = 1
 # ---------------------------------------------------------------------------
 # Hyperspace animation
 # ---------------------------------------------------------------------------
-HYPER_DURATION: int = 64      # Ticks for hyperspace animation
+HYPER_DURATION: int = 64      # Ticks for hyperspace animation (split 50/50 expand/contract)
+HYPER_PHASE: int = 32         # Ticks per expand/contract phase (HYPER_DURATION // 2)
 HYPER_PARTICLES: int = 32     # Particles per ship
 EXPLOSION_FRAMES: int = 8     # Number of explosion animation frames
+SHIP_EXPLOSION_TICKS: int = 40  # exps value set on ship death (≈0.55 s at 73 fps)
 
 # ---------------------------------------------------------------------------
 # Attract mode
