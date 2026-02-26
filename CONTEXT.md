@@ -7,7 +7,8 @@
 The objective is a faithful 1:1 recreation of **SpaceWar v1.72 (1985/86)** originally developed by **Bill Seiler** for DOS. The recreation is being built in **Python** using the **Pygame** library, focusing on replicating the exact physics, monochrome vector aesthetic, and unique "Energy Balance" mechanics of the original.
 
 ### 2. Reference Materials Retained
-*   **Requirements Document:** A detailed Markdown file (`spacewar_requirements.md`) based on the original game manual (`spacewar.doc`).
+*   **Updated Requirements:** maintained requirements doc (`REQUIREMENTS.md`)
+*   **Requirements Document:** Original game manual (`spacewar.doc`).
 *   **Original Source Code:** The assembly source code for **version 1.50** has been located for reference on logic, gravity mathematics, and torpedo physics.
 *   **Current Python Build:** A functional Pygame script that implements ship movement, dual energy meters (S and E), gravity, a central planet with moons, and vertex-based explosion debris.
 
@@ -25,12 +26,6 @@ The project must adhere to these specific (often overlooked) mechanics from the 
 *   **Physics:** Implemented zero-friction inertia, screen wrapping, and inverse-square gravity.
 *   **Explosions:** Implemented a system where the ship's hull vertices shatter into individual points that expand based on the ship's final velocity.
 *   **UI:** Implemented a function-key footer (F1–F8) to toggle game features (Gravity, Planet, Robots) and handle resets.
-
-### 5. Current Development State
-The current Python code is stable for 2-player combat. The next phases of development involve:
-1.  **Robot AI:** Implementing the "Left" (Defensive) and "Right" (Offensive) Auto-Robot players.
-2.  **Sound System:** Adding the 8-bit warning tones for low shields and white-noise bursts for engines/torpedoes.
-3.  **Refinement:** Fine-tuning the gravity constant and energy recharge rates to match the "feel" of the 1985 original.
 
 ### 6. Suggested Prompt to Resume
 *"I am working on a recreation of SpaceWar 1985. I have the requirements document and the original v1.50 assembly source for reference. We have a working Pygame base with gravity and energy balance. I would like to move on to [insert next step, e.g., 'implementing the AI Robot players' or 'refining the torpedo gravity physics']."*
