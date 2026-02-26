@@ -137,11 +137,17 @@ def _parse_args() -> argparse.Namespace:
         '--altkeys', action='store_true', default=False,
         help='Replace right-player numpad controls with UIO/JKL/M,. layout',
     )
+    parser.add_argument(
+        '--neon', action='store_true', default=False,
+        help='Enable neon colour mode (white-hot core + coloured glow on sprites)',
+    )
     args = parser.parse_args()
     if args.two_x:
         args.scale = 2
     if args.scale < 1:
         parser.error('--scale must be >= 1')
+    if args.scale == 3:
+        args.neon = True   # --scale 3 easter egg
     return args
 
 
@@ -189,9 +195,10 @@ def main() -> None:
     # Initialise game state
     state = new_game_state()
     state.alt_keys = args.altkeys
+    state.neon_mode = args.neon
     seed_random(state.rng_state)
     state.star_positions = generate_stars(state.rng_state)
-    bg = create_background(state.star_positions)
+    bg = create_background(state.star_positions, neon=state.neon_mode)
 
     # Sound
     sounds = init_sound()

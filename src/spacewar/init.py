@@ -161,6 +161,9 @@ class GameState:
     # --altkeys: replace right-player numpad controls with UIO/JKL/M,. layout
     alt_keys: bool = False
 
+    # --neon / --scale 3: neon colour mode
+    neon_mode: bool = False
+
 
 # ---------------------------------------------------------------------------
 # Initialisation helpers

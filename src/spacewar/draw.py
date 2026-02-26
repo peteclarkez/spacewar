@@ -71,6 +71,16 @@ _TORP_COLOR = _WHITE
 _PLANET_COLOR = _WHITE
 _STAR_COLOR = _DIM
 
+# Neon glow colours (--neon / --scale 3 mode); core is always _WHITE
+_NEON_ENT      = (0,   220, 255)   # electric cyan
+_NEON_KLN      = (255, 120,   0)   # orange
+_NEON_ETOR     = (0,   255, 100)   # green
+_NEON_KTOR     = (255,  50,  50)   # red
+_NEON_PLT      = (160,  80, 255)   # purple
+_NEON_STAR     = (20,   20,  70)   # deep blue
+_NEON_PART_ENT = (0,   160, 255)   # blue — Enterprise hyperspace particles
+_NEON_PART_KLN = (255,  80,   0)   # orange — Klingon hyperspace particles
+
 
 # ---------------------------------------------------------------------------
 # Coordinate helpers
@@ -127,6 +137,56 @@ def _blit_sprite(
                     surface.set_at((sx, sy), color)
 
 
+def _blit_sprite_neon(
+    surface: pygame.Surface,
+    bitmap: list[int],
+    n_bits: int,
+    sx0: int,
+    sy0: int,
+    glow_color: tuple,
+) -> None:
+    """Draw a sprite with neon glow effect: coloured halo then white-hot core.
+
+    Pass 1 — each set pixel's 8 neighbours are painted in a dim (50%) version
+              of glow_color, creating a soft coloured halo.
+    Pass 2 — the exact sprite pixels are overdrawn in pure white, giving a
+              bright white-hot core surrounded by the coloured glow.
+    """
+    w = SCREEN_W
+    h = SCREEN_H
+    dim = (glow_color[0] // 2, glow_color[1] // 2, glow_color[2] // 2)
+
+    # Pass 1: coloured halo
+    for row_idx, row_bits in enumerate(bitmap):
+        if row_bits == 0:
+            continue
+        sy = sy0 + row_idx
+        if sy < 0 or sy >= h:
+            continue
+        for bit in range(n_bits):
+            if row_bits & (1 << (n_bits - 1 - bit)):
+                sx = sx0 + bit
+                for dy in (-1, 0, 1):
+                    for dx in (-1, 0, 1):
+                        if dx == 0 and dy == 0:
+                            continue
+                        nx = sx + dx
+                        ny = sy + dy
+                        if 0 <= nx < w and 0 <= ny < h:
+                            surface.set_at((nx, ny), dim)
+
+    # Pass 2: white-hot core
+    for row_idx, row_bits in enumerate(bitmap):
+        if row_bits == 0:
+            continue
+        sy = sy0 + row_idx
+        for bit in range(n_bits):
+            if row_bits & (1 << (n_bits - 1 - bit)):
+                sx = sx0 + bit
+                if 0 <= sx < w and 0 <= sy < h:
+                    surface.set_at((sx, sy), _WHITE)
+
+
 def draw_sprite(
     surface: pygame.Surface,
     bitmap: list[int],
@@ -165,17 +225,24 @@ def draw_ship_sprite(
 # Starfield
 # ---------------------------------------------------------------------------
 
-def draw_starfield(surface: pygame.Surface, stars: list[tuple[int, int]]) -> None:
+def draw_starfield(
+    surface: pygame.Surface,
+    stars: list[tuple[int, int]],
+    color: tuple = _STAR_COLOR,
+) -> None:
     """Draw all 512 stars as single pixels.  Called once to build background."""
     for (vx, vy) in stars:
-        put_pixel(surface, vx, vy, _STAR_COLOR)
+        put_pixel(surface, vx, vy, color)
 
 
-def create_background(stars: list[tuple[int, int]]) -> pygame.Surface:
+def create_background(
+    stars: list[tuple[int, int]],
+    neon: bool = False,
+) -> pygame.Surface:
     """Create a static background surface with all stars painted."""
     bg = pygame.Surface((SCREEN_W, SCREEN_H))
     bg.fill(_BLACK)
-    draw_starfield(bg, stars)
+    draw_starfield(bg, stars, color=_NEON_STAR if neon else _STAR_COLOR)
     return bg
 
 
@@ -188,6 +255,7 @@ def _draw_planet_at(
     frame: list[int],
     cx: int,
     cy: int,
+    color: tuple = _PLANET_COLOR,
 ) -> None:
     """Render one planet animation frame centred at virtual (cx, cy).
 
@@ -214,18 +282,19 @@ def _draw_planet_at(
                 for bx in range(x0, x1):
                     sx = sx0 + bx
                     if 0 <= sx < SCREEN_W:
-                        surface.set_at((sx, sy_base), _PLANET_COLOR)
-                        surface.set_at((sx, sy_base + 1), _PLANET_COLOR)
+                        surface.set_at((sx, sy_base), color)
+                        surface.set_at((sx, sy_base + 1), color)
 
 
 def draw_planet(surface: pygame.Surface, state: GameState, attract: bool = False) -> None:
     """Draw animated planet centred on its position."""
     frame = get_planet_frame(state.planet_state)
+    color = _NEON_PLT if state.neon_mode else _PLANET_COLOR
     if attract:
         from .constants import ATTRACT_PLANET_X, ATTRACT_PLANET_Y
-        _draw_planet_at(surface, frame, ATTRACT_PLANET_X, ATTRACT_PLANET_Y)
+        _draw_planet_at(surface, frame, ATTRACT_PLANET_X, ATTRACT_PLANET_Y, color)
     else:
-        _draw_planet_at(surface, frame, PLANET_X, PLANET_Y)
+        _draw_planet_at(surface, frame, PLANET_X, PLANET_Y, color)
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +311,12 @@ def draw_enterprise(surface: pygame.Surface, state: GameState) -> None:
     if ship.flags & CLOAK_BIT:
         return   # cloaked — invisible
     bitmap = get_enterprise_sprite(ship.angle)
-    draw_ship_sprite(surface, bitmap, ship.x, ship.y, _ENT_COLOR)
+    if state.neon_mode:
+        sx0 = ship.x - 8
+        sy0 = ship.y * Y_SCALE - 8
+        _blit_sprite_neon(surface, bitmap, 16, sx0, sy0, _NEON_ENT)
+    else:
+        draw_ship_sprite(surface, bitmap, ship.x, ship.y, _ENT_COLOR)
     ship.x_drawn = ship.x
     ship.y_drawn = ship.y
     ship.angle_drawn = ship.angle
@@ -259,7 +333,12 @@ def draw_klingon(surface: pygame.Surface, state: GameState) -> None:
     if ship.flags & CLOAK_BIT:
         return
     bitmap = get_klingon_sprite(ship.angle)
-    draw_ship_sprite(surface, bitmap, ship.x, ship.y, _KLN_COLOR)
+    if state.neon_mode:
+        sx0 = ship.x - 8
+        sy0 = ship.y * Y_SCALE - 8
+        _blit_sprite_neon(surface, bitmap, 16, sx0, sy0, _NEON_KLN)
+    else:
+        draw_ship_sprite(surface, bitmap, ship.x, ship.y, _KLN_COLOR)
     ship.x_drawn = ship.x
     ship.y_drawn = ship.y
     ship.angle_drawn = ship.angle
@@ -272,14 +351,24 @@ def draw_torpedoes(surface: pygame.Surface, state: GameState) -> None:
         obj = state.objects[i]
         if obj.eflg == EFLG_ACTIVE:
             bitmap = get_enterprise_torp_sprite(obj.angle)
-            draw_sprite(surface, bitmap, obj.x, obj.y, _TORP_COLOR)
+            if state.neon_mode:
+                sx0 = obj.x - 4
+                sy0 = obj.y * Y_SCALE - 4
+                _blit_sprite_neon(surface, bitmap, 8, sx0, sy0, _NEON_ETOR)
+            else:
+                draw_sprite(surface, bitmap, obj.x, obj.y, _TORP_COLOR)
         elif obj.eflg == EFLG_EXPLODING:
             _draw_explosion(surface, obj)
     for i in range(KLN_TORP_START, KLN_TORP_END):
         obj = state.objects[i]
         if obj.eflg == EFLG_ACTIVE:
             bitmap = get_klingon_torp_sprite(obj.angle)
-            draw_sprite(surface, bitmap, obj.x, obj.y, _TORP_COLOR)
+            if state.neon_mode:
+                sx0 = obj.x - 4
+                sy0 = obj.y * Y_SCALE - 4
+                _blit_sprite_neon(surface, bitmap, 8, sx0, sy0, _NEON_KTOR)
+            else:
+                draw_sprite(surface, bitmap, obj.x, obj.y, _TORP_COLOR)
         elif obj.eflg == EFLG_EXPLODING:
             _draw_explosion(surface, obj)
 
@@ -342,14 +431,18 @@ def _draw_explosion(
 
 def draw_hyper_particles(surface: pygame.Surface, state: GameState) -> None:
     """Draw scatter particles for both ships' hyperspace animations."""
-    for flag_attr, particle_start in (('hyper_ent_flag', 0), ('hyper_kln_flag', 32)):
+    for flag_attr, particle_start, neon_color in (
+        ('hyper_ent_flag', 0,  _NEON_PART_ENT),
+        ('hyper_kln_flag', 32, _NEON_PART_KLN),
+    ):
         if getattr(state, flag_attr) == 0:
             continue
+        color = neon_color if state.neon_mode else _WHITE
         for p in state.hyper_particles[particle_start:particle_start + 32]:
             if p.active:
                 vx = int(p.x)
                 vy = int(p.y)
-                put_pixel(surface, vx, vy, _WHITE)
+                put_pixel(surface, vx, vy, color)
 
 
 # ---------------------------------------------------------------------------
