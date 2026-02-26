@@ -54,6 +54,7 @@ from .constants import (
     HYPER_PARTICLES,
     MODE_ATTRACT, MODE_PLAY,
     WRAP_FACTOR, VIRTUAL_W, VIRTUAL_H,
+    PLANET_X, PLANET_Y, PLANET_RANGE,
 )
 from .trig import atan_approx
 from .stars import random_next
@@ -148,10 +149,16 @@ def _activate_hyperspace(state: GameState, ship_idx: int) -> None:
     ship.fire |= HYPER_FIRE_BIT
     ship.eflg = EFLG_EXPLODING   # hide ship during transit
 
-    # Pick random destination now (safe margin from wrap/edge)
+    # Pick random destination now (safe margin from wrap/edge).
+    # When planet is active, reject destinations too close to the planet.
     import random as _random
-    dest_x = _random.randint(WRAP_FACTOR + 16, VIRTUAL_W - WRAP_FACTOR - 16)
-    dest_y = _random.randint(WRAP_FACTOR + 16, VIRTUAL_H - WRAP_FACTOR - 16)
+    while True:
+        dest_x = _random.randint(WRAP_FACTOR + 16, VIRTUAL_W - WRAP_FACTOR - 16)
+        dest_y = _random.randint(WRAP_FACTOR + 16, VIRTUAL_H - WRAP_FACTOR - 16)
+        if not (state.planet_enable & PLANET_BIT):
+            break
+        if abs(dest_x - PLANET_X) >= PLANET_RANGE or abs(dest_y - PLANET_Y) >= PLANET_RANGE:
+            break
 
     if ship_idx == ENT_OBJ:
         state.hyper_ent_dest_x = dest_x

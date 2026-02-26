@@ -252,26 +252,45 @@ _PLANET_FRAMES: list[list[int]] = [
 # ---------------------------------------------------------------------------
 
 def get_enterprise_sprite(angle: int) -> list[int]:
-    """Return Enterprise sprite for 0-255 angle (16 rows × 16-bit)."""
-    idx = (angle * 16 // 256) % 16
+    """Return Enterprise sprite for 0-255 angle (16 rows × 16-bit).
+
+    Frame selection mirrors DRAW.ASM Xor_Ent:
+        add bl, 8       ; round to nearest frame
+        and bx, 0F0H    ; 16 frames (step 16)
+        shr bx, 4       ; frame index
+    """
+    idx = ((angle + 8) & 0xFF) >> 4
     return _ENTERPRISE_FRAMES[idx]
 
 
 def get_klingon_sprite(angle: int) -> list[int]:
-    """Return Klingon sprite for 0-255 angle (16 rows × 16-bit)."""
-    idx = (angle * 16 // 256) % 16
+    """Return Klingon sprite for 0-255 angle (16 rows × 16-bit).
+
+    Same rounding formula as get_enterprise_sprite (DRAW.ASM Xor_Kln uses
+    identical code path via xore200).
+    """
+    idx = ((angle + 8) & 0xFF) >> 4
     return _KLINGON_FRAMES[idx]
 
 
 def get_enterprise_torp_sprite(angle: int) -> list[int]:
-    """Return Enterprise torpedo sprite for 0-255 angle (8 rows × 8-bit)."""
-    idx = (angle * 8 // 256) % 8
+    """Return Enterprise torpedo sprite for 0-255 angle (8 rows × 8-bit).
+
+    Frame selection mirrors DRAW.ASM Xor_Torp:
+        add bl, 16      ; round to nearest frame
+        and bx, 0E0H    ; 8 frames (step 32)
+        shr bx, 5       ; frame index
+    """
+    idx = ((angle + 16) & 0xFF) >> 5
     return _ENTERPRISE_TORP_FRAMES[idx]
 
 
 def get_klingon_torp_sprite(angle: int) -> list[int]:
-    """Return Klingon torpedo sprite for 0-255 angle (8 rows × 8-bit)."""
-    idx = (angle * 8 // 256) % 8
+    """Return Klingon torpedo sprite for 0-255 angle (8 rows × 8-bit).
+
+    Same rounding formula as get_enterprise_torp_sprite.
+    """
+    idx = ((angle + 16) & 0xFF) >> 5
     return _KLINGON_TORP_FRAMES[idx]
 
 
