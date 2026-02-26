@@ -183,63 +183,49 @@ def create_background(stars: list[tuple[int, int]]) -> pygame.Surface:
 # Planet
 # ---------------------------------------------------------------------------
 
-def draw_planet(surface: pygame.Surface, state: GameState, attract: bool = False) -> None:
-    """Draw animated planet centred on its position.
+def _draw_planet_at(
+    surface: pygame.Surface,
+    frame: list[int],
+    cx: int,
+    cy: int,
+) -> None:
+    """Render one planet animation frame centred at virtual (cx, cy).
 
-    The PICT16.ASM bitmap is 32 rows × 32 bits, designed for CGA 640×200 where
-    each scan line is displayed ~2× taller on a 4:3 monitor (pixel aspect ~2.4:1).
-
-    Game mode  — all 32 rows rendered at Y_SCALE=2 (each row → 2 screen rows).
-                 Horizontal: 32 source bits scaled to 48 screen pixels (1.5×).
-                 Result: body ~48 wide × ~48 tall, ring visible above and below.
-
-    Attract mode — all 32 rows rendered at 1:1 screen pixels, all 32 bits tested
-                   correctly.  Planet is 32×32 screen pixels in the top-right corner.
+    32 source rows drawn at Y_SCALE=2 (each row → 2 screen rows).
+    32 source bits scaled horizontally to 48 screen pixels (1.5×) via a
+    Bresenham 3:2 step, so the rendered body is ~48 wide × ~64 tall screen
+    pixels — appearing as a circular planet on the 640×480 display.
     """
-    frame = get_planet_frame(state.planet_state)
+    _OUT_W = 48
+    sx0 = cx - _OUT_W // 2
+    for row_idx, row in enumerate(frame):
+        if row == 0:
+            continue
+        vy = cy - 16 + row_idx
+        sy_base = vy * Y_SCALE
+        if sy_base < 0 or sy_base + 1 >= SCREEN_H:
+            continue
+        for bit in range(32):
+            if row & (1 << (31 - bit)):
+                x0 = (bit * _OUT_W) // 32
+                x1 = ((bit + 1) * _OUT_W) // 32
+                if x0 == x1:
+                    x1 = x0 + 1
+                for bx in range(x0, x1):
+                    sx = sx0 + bx
+                    if 0 <= sx < SCREEN_W:
+                        surface.set_at((sx, sy_base), _PLANET_COLOR)
+                        surface.set_at((sx, sy_base + 1), _PLANET_COLOR)
 
+
+def draw_planet(surface: pygame.Surface, state: GameState, attract: bool = False) -> None:
+    """Draw animated planet centred on its position."""
+    frame = get_planet_frame(state.planet_state)
     if attract:
         from .constants import ATTRACT_PLANET_X, ATTRACT_PLANET_Y
-        # 32×32 at 1:1; centred at virtual (ATTRACT_PLANET_X, ATTRACT_PLANET_Y).
-        # All 32 bits of each row tested — no clipping.
-        sx0 = ATTRACT_PLANET_X - 16
-        sy0 = ATTRACT_PLANET_Y * Y_SCALE - 16
-        for row_idx, row in enumerate(frame):
-            if row == 0:
-                continue
-            sy = sy0 + row_idx
-            if sy < 0 or sy >= SCREEN_H:
-                continue
-            for bit in range(32):
-                if row & (1 << (31 - bit)):
-                    sx = sx0 + bit
-                    if 0 <= sx < SCREEN_W:
-                        surface.set_at((sx, sy), _PLANET_COLOR)
+        _draw_planet_at(surface, frame, ATTRACT_PLANET_X, ATTRACT_PLANET_Y)
     else:
-        # All 32 rows via Y_SCALE=2 doubling.
-        # Horizontal: 32 source bits scaled to 48 screen pixels (1.5×) so the
-        # rendered planet is ~48 wide × ~48 tall — matching user-observed height.
-        # Each source bit maps to either 1 or 2 screen pixels (Bresenham 3:2 step).
-        _OUT_W = 48
-        sx0 = PLANET_X - _OUT_W // 2
-        for row_idx, row in enumerate(frame):
-            if row == 0:
-                continue
-            vy = PLANET_Y - 16 + row_idx
-            sy_base = vy * Y_SCALE
-            if sy_base < 0 or sy_base + 1 >= SCREEN_H:
-                continue
-            for bit in range(32):
-                if row & (1 << (31 - bit)):
-                    x0 = (bit * _OUT_W) // 32
-                    x1 = ((bit + 1) * _OUT_W) // 32
-                    if x0 == x1:
-                        x1 = x0 + 1
-                    for bx in range(x0, x1):
-                        sx = sx0 + bx
-                        if 0 <= sx < SCREEN_W:
-                            surface.set_at((sx, sy_base), _PLANET_COLOR)
-                            surface.set_at((sx, sy_base + 1), _PLANET_COLOR)
+        _draw_planet_at(surface, frame, PLANET_X, PLANET_Y)
 
 
 # ---------------------------------------------------------------------------
