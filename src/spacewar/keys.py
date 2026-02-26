@@ -58,6 +58,8 @@ from .constants import (
 )
 from .trig import atan_approx
 from .stars import random_next
+
+_PLANET_AVOID_RANGE = 40  # Manhattan half-width of robot danger zone (virtual px)
 from .torpedo import fire_enterprise_torpedo, fire_klingon_torpedo
 from .init import GameState, HyperParticle
 
@@ -419,6 +421,21 @@ def process_function_keys(state: GameState, key_state: KeyState) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Robot AI — helpers
+# ---------------------------------------------------------------------------
+
+def _planet_avoidance_angle(state: GameState, ship) -> int | None:
+    """Return bearing AWAY from planet if active and ship is in danger zone, else None."""
+    if not (state.planet_enable & PLANET_BIT):
+        return None
+    dx = ship.x - PLANET_X
+    dy = ship.y - PLANET_Y
+    if abs(dx) >= _PLANET_AVOID_RANGE or abs(dy) >= _PLANET_AVOID_RANGE:
+        return None
+    return atan_approx(dx, dy)   # bearing from planet toward ship = away direction
+
+
+# ---------------------------------------------------------------------------
 # Robot AI — Enterprise (auto_ent)
 # ---------------------------------------------------------------------------
 
@@ -448,30 +465,36 @@ def _auto_enterprise(state: GameState, surface=None) -> None:
         ship.flags &= ~THRUST_BIT
         return
 
-    # 3. Scan Klingon side for targets in phaser range
-    target_found = False
-    for i in range(KLN_OBJ, 16):
-        obj = state.objects[i]
-        if obj.eflg != EFLG_ACTIVE:
-            continue
-        if abs(obj.x - ship.x) < PHASER_RANGE and abs(obj.y - ship.y) < PHASER_RANGE:
-            # 4. Compute bearing and fire phasers
-            dx = obj.x - ship.x
-            dy = obj.y - ship.y
-            ship.angle = atan_approx(dx, dy)
-            if surface is not None:
-                from .phaser import fire_phaser_enterprise
-                fire_phaser_enterprise(state, surface)
-            target_found = True
-            break
-
-    # 5. Random impulse
-    if random_next(state.rng_state) % PROB_IMPULSE == 0:
+    # 3. Planet avoidance takes priority over targeting
+    avoid_angle = _planet_avoidance_angle(state, ship)
+    if avoid_angle is not None:
+        ship.angle = avoid_angle
         ship.flags |= THRUST_BIT
     else:
-        ship.flags &= ~THRUST_BIT
+        # 3b. Scan Klingon side for targets in phaser range
+        target_found = False
+        for i in range(KLN_OBJ, 16):
+            obj = state.objects[i]
+            if obj.eflg != EFLG_ACTIVE:
+                continue
+            if abs(obj.x - ship.x) < PHASER_RANGE and abs(obj.y - ship.y) < PHASER_RANGE:
+                # 4. Compute bearing and fire phasers
+                dx = obj.x - ship.x
+                dy = obj.y - ship.y
+                ship.angle = atan_approx(dx, dy)
+                if surface is not None:
+                    from .phaser import fire_phaser_enterprise
+                    fire_phaser_enterprise(state, surface)
+                target_found = True
+                break
 
-    # 6. Random hyperspace
+        # 5. Random impulse
+        if random_next(state.rng_state) % PROB_IMPULSE == 0:
+            ship.flags |= THRUST_BIT
+        else:
+            ship.flags &= ~THRUST_BIT
+
+    # 6. Random hyperspace (still runs regardless of avoidance)
     if random_next(state.rng_state) % PROB_HYPER == 0:
         _activate_hyperspace(state, ENT_OBJ)
 
@@ -499,8 +522,11 @@ def _auto_klingon(state: GameState, surface=None) -> None:
 
     ent = state.objects[ENT_OBJ]
 
-    # 1. Always aim at Enterprise
-    if ent.eflg == EFLG_ACTIVE:
+    # 1. Aim at Enterprise OR steer away from planet (avoidance has priority)
+    avoid_angle = _planet_avoidance_angle(state, ship)
+    if avoid_angle is not None:
+        ship.angle = avoid_angle
+    elif ent.eflg == EFLG_ACTIVE:
         dx = ent.x - ship.x
         dy = ent.y - ship.y
         ship.angle = atan_approx(dx, dy)
@@ -527,12 +553,14 @@ def _auto_klingon(state: GameState, surface=None) -> None:
         else:
             fire_klingon_torpedo(state)
 
-    # 5. Random impulse
-    if random_next(state.rng_state) % PROB_IMPULSE == 0:
+    # 5. Impulse: forced thrust during avoidance, else random
+    if avoid_angle is not None:
+        ship.flags |= THRUST_BIT
+    elif random_next(state.rng_state) % PROB_IMPULSE == 0:
         ship.flags |= THRUST_BIT
     else:
         ship.flags &= ~THRUST_BIT
 
-    # 6. Random hyperspace
+    # 6. Random hyperspace (still runs regardless of avoidance)
     if random_next(state.rng_state) % PROB_HYPER == 0:
         _activate_hyperspace(state, KLN_OBJ)
