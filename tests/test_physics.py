@@ -409,6 +409,15 @@ class TestTickExplosions:
         _tick_explosions(state)
         assert obj.eflg == EFLG_ACTIVE
 
+    def test_exploding_with_zero_exps_unchanged(self):
+        """Real hyperspace ships have eflg=EXPLODING and exps=0 — must not become INACTIVE."""
+        state = new_game_state()
+        obj = state.objects[ENT_OBJ]
+        obj.eflg = EFLG_EXPLODING
+        obj.exps = 0
+        _tick_explosions(state)
+        assert obj.eflg == EFLG_EXPLODING   # must not be set to INACTIVE
+
 
 class TestPlanetAnimation:
     def test_frame_advances_at_planet_time(self):
@@ -435,14 +444,18 @@ class TestPlanetAnimation:
 
 class TestHyperspace:
     def _setup_hyper(self, flag_start=1, dest_x=400, dest_y=100):
-        """Set up state with ENT in hyperspace, particles active."""
+        """Set up state with ENT in real hyperspace, particles active.
+
+        Real hyperspace sets eflg=EFLG_EXPLODING (to hide the ship during transit)
+        and exps=0 (death explosions use exps>0 to distinguish themselves).
+        """
         state = new_game_state()
         ship = state.objects[ENT_OBJ]
         ship.x = 100
         ship.y = 50
         ship.vx = ship.vy = 0
-        ship.eflg = EFLG_EXPLODING
-        ship.exps = 0   # real hyperspace (not death)
+        ship.eflg = EFLG_EXPLODING   # real hyperspace — hidden during transit
+        ship.exps = 0
         state.hyper_ent_flag = flag_start
         state.hyper_ent_dest_x = dest_x
         state.hyper_ent_dest_y = dest_y
@@ -498,16 +511,28 @@ class TestHyperspace:
         assert state.hyper_ent_flag == 0
 
     def test_death_explosion_no_teleport(self):
-        """Death explosion: particles expand, but ship never teleports."""
+        """Death explosion: particles expand, but ship never teleports.
+
+        Two cases:
+          - Mid-animation: eflg=EXPLODING, exps>0
+          - Final frame:   eflg=INACTIVE,  exps=0  (after _tick_explosions ran)
+        """
+        # Mid-animation case: exps > 0
         state = self._setup_hyper(flag_start=HYPER_DURATION, dest_x=300, dest_y=120)
-        # Mark as death explosion by setting exps > 0
-        state.objects[ENT_OBJ].exps = 10
+        state.objects[ENT_OBJ].exps = 10   # death explosion still counting
         _tick_hyperspace(state)
         ship = state.objects[ENT_OBJ]
-        # Ship should NOT have been teleported
-        assert ship.x != 300 or ship.y != 120
-        # Flag keeps incrementing (not reset to 0)
-        assert state.hyper_ent_flag != 0
+        assert ship.x != 300 or ship.y != 120, "Teleport occurred mid-animation"
+        assert state.hyper_ent_flag != 0, "Flag was reset mid-animation"
+
+        # Final frame case: _tick_explosions already set eflg=INACTIVE, exps=0
+        state = self._setup_hyper(flag_start=HYPER_DURATION, dest_x=300, dest_y=120)
+        state.objects[ENT_OBJ].eflg = EFLG_INACTIVE
+        state.objects[ENT_OBJ].exps = 0
+        _tick_hyperspace(state)
+        ship = state.objects[ENT_OBJ]
+        assert ship.x != 300 or ship.y != 120, "Teleport occurred on final frame"
+        assert state.hyper_ent_flag != 0, "Flag was reset on final frame"
 
 
 class TestRunPhysicsTick:

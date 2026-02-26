@@ -154,19 +154,19 @@ def init_sound() -> dict[str, pygame.mixer.Sound]:
     except pygame.error:
         return {}
 
-    # Phaser: ascending sweep matching SOUND.ASM neg(STATE)<<3 divisor ramp
-    # 15 steps × 1/73 Hz ≈ 205 ms; 601 Hz (step 1) → 1097 Hz (step 15)
-    phaser = _gen_chirp(601, 1097, 0.21, 0.5)
+    # Phaser: ascending sweep — 250 Hz (start) → 500 Hz (end) over ~205 ms
+    # (Original ASM: 601→1097 Hz; lowered further for preferred tone)
+    phaser = _gen_chirp(250, 500, 0.21, 0.5)
 
-    # Photon: HI_BLEEP divisor = 0x80 = 128 → 9322 Hz; duration = 2 frames ≈ 27 ms
-    photon = _gen_square(_PC_CLOCK / 128, 0.03, 0.5)
+    # Photon: sharp blip — 2500 Hz for 27 ms
+    # (Original ASM: 9322 Hz; lowered further for less harsh sound)
+    photon = _gen_square(2500, 0.03, 0.5)
 
-    # Warning high: HI_PITCH divisor = 0x400 = 1024 → 1166 Hz, one 32-frame slot
-    # Warning low:  LO_PITCH divisor = 0x800 = 2048 →  583 Hz, one 32-frame slot
-    # Duration = WARNING_TIME(32) frames / 73 fps ≈ 438 ms each
+    # Warning: alternating 500 Hz (hi) and 250 Hz (lo), each for one 32-frame slot
+    # (Original ASM: 1166 Hz / 583 Hz; lowered further)
     warning_dur = WARNING_TIME / 73
-    warning_hi = _gen_square(_PC_CLOCK / 0x400, warning_dur, 0.35)
-    warning_lo = _gen_square(_PC_CLOCK / 0x800, warning_dur, 0.35)
+    warning_hi = _gen_square(500, warning_dur, 0.35)
+    warning_lo = _gen_square(250, warning_dur, 0.35)
 
     # Explosion: random divisor | 0x2000 → 18–145 Hz rumble; duration = SHIP_EXPLOSION_TICKS
     # 100 ticks / 73 fps ≈ 1.37 s
@@ -175,8 +175,9 @@ def init_sound() -> dict[str, pygame.mixer.Sound]:
     # Torp hit: short white-noise burst (no ASM equivalent — our addition)
     torp_hit = _gen_noise(0.10, 0.5)
 
-    # Hyper: flag_counter × 256 divisor → descending 4661→73 Hz over 64 frames ≈ 0.88 s
-    hyper = _gen_chirp(_PC_CLOCK / 256, _PC_CLOCK / 16384, 0.88, 0.4)
+    # Hyper: descending sweep — 1200 Hz (start) → 40 Hz (end) over ~0.88 s
+    # (Original ASM: 4661→73 Hz; lowered further for less piercing onset)
+    hyper = _gen_chirp(1200, 40, 0.88, 0.4)
 
     return {
         'phaser':      phaser,

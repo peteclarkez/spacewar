@@ -269,11 +269,12 @@ def _tick_explosions(state: GameState) -> None:
     """Advance explosion animation counters.
 
     When exps reaches 0 the object becomes EFLG_INACTIVE.
+    Only acts when exps > 0 — this avoids disturbing ships in real hyperspace,
+    which also use EFLG_EXPLODING but with exps=0.
     """
     for obj in state.objects:
-        if obj.eflg == EFLG_EXPLODING:
-            if obj.exps > 0:
-                obj.exps -= 1
+        if obj.eflg == EFLG_EXPLODING and obj.exps > 0:
+            obj.exps -= 1
             if obj.exps == 0:
                 obj.eflg = EFLG_INACTIVE
 
@@ -319,7 +320,10 @@ def _tick_hyperspace(state: GameState) -> None:
 
         ship = state.objects[ship_idx]
         # ship.exps > 0 means handle_death triggered this, not a real jump.
-        is_death = (ship.exps > 0)
+        # Also guard against the final death frame: _tick_explosions runs before
+        # _tick_hyperspace and sets eflg=INACTIVE when exps hits 0, so we check
+        # EFLG_INACTIVE too — real hyperspace always stays EFLG_EXPLODING until teleport.
+        is_death = (ship.exps > 0) or (ship.eflg == EFLG_INACTIVE)
 
         if flag == HYPER_PHASE + 1 and not is_death:
             # Real hyperspace: switch to contraction phase.
