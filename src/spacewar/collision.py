@@ -31,6 +31,7 @@ from .constants import (
     SHIP_TO_SHIP_RANGE, SHIP_TO_TORP_RANGE, TORP_TO_TORP_RANGE,
     BOUNCE_FACTOR, PHOTON_DAMAGE, PLANET_DAMAGE,
     PLANET_X, PLANET_Y, PLANET_RANGE, PLANET_BIT,
+    TORP_HIT_SOUND,
 )
 from .init import GameObject, GameState
 
@@ -109,15 +110,17 @@ def _ship_ship_collision(state: GameState) -> None:
 # Ship-torpedo collision
 # ---------------------------------------------------------------------------
 
-def _ship_torp_collision(ship: GameObject, torps: list[tuple[int, GameObject]]) -> None:
+def _ship_torp_collision(ship: GameObject, torps: list[tuple[int, GameObject]]) -> bool:
     """Check one ship against a list of (index, torpedo) pairs.
 
     Mirrors the cmps_ship_torp inner loop in CMPS.ASM.
     Ship loses PHOTON_DAMAGE shields per hit; torpedo set to EFLG_EXPLODING.
+    Returns True if any hit occurred.
     """
     if ship.eflg != EFLG_ACTIVE:
-        return
+        return False
 
+    hit = False
     for _, torp in torps:
         if torp.eflg != EFLG_ACTIVE:
             continue
@@ -125,6 +128,8 @@ def _ship_torp_collision(ship: GameObject, torps: list[tuple[int, GameObject]]) 
             ship.shields -= PHOTON_DAMAGE
             torp.eflg = EFLG_EXPLODING
             torp.exps = 8
+            hit = True
+    return hit
 
 
 # ---------------------------------------------------------------------------
@@ -134,12 +139,14 @@ def _ship_torp_collision(ship: GameObject, torps: list[tuple[int, GameObject]]) 
 def _torp_torp_collision(
     ent_torps: list[tuple[int, GameObject]],
     kln_torps: list[tuple[int, GameObject]],
-) -> None:
+) -> bool:
     """Check all Enterprise torps against all Klingon torps.
 
     Mirrors cmps_torp_torp in CMPS.ASM.
     Both torpedoes set to EFLG_EXPLODING.
+    Returns True if any collision occurred.
     """
+    hit = False
     for _, et in ent_torps:
         if et.eflg != EFLG_ACTIVE:
             continue
@@ -151,22 +158,26 @@ def _torp_torp_collision(
                 et.exps = 8
                 kt.eflg = EFLG_EXPLODING
                 kt.exps = 8
+                hit = True
+    return hit
 
 
 # ---------------------------------------------------------------------------
 # Planet collision
 # ---------------------------------------------------------------------------
 
-def _planet_collision(state: GameState) -> None:
+def _planet_collision(state: GameState) -> bool:
     """Check all active objects against the planet (if PLANET_BIT set).
 
     Mirrors cmps_planet in CMPS.ASM.
     Ships: lose PLANET_DAMAGE shields.
     Torpedoes: explode immediately.
+    Returns True if any torpedo hit the planet.
     """
     if not (state.planet_enable & PLANET_BIT):
-        return
+        return False
 
+    torp_hit = False
     for i, obj in enumerate(state.objects):
         if obj.eflg != EFLG_ACTIVE:
             continue
@@ -176,6 +187,8 @@ def _planet_collision(state: GameState) -> None:
             else:
                 obj.eflg = EFLG_EXPLODING
                 obj.exps = 8
+                torp_hit = True
+    return torp_hit
 
 
 # ---------------------------------------------------------------------------
@@ -196,23 +209,17 @@ def check_all_collisions(state: GameState) -> None:
     # 1. Ship vs ship
     _ship_ship_collision(state)
 
-    # 2. Enterprise ship vs Klingon torpedoes
-    _ship_torp_collision(objs[ENT_OBJ], kln_torps)
+    # 2-6. Torpedo collisions — accumulate any hit for the hit sound
+    torp_hit = False
+    torp_hit |= _ship_torp_collision(objs[ENT_OBJ], kln_torps)   # 2. ENT vs KLN torps
+    torp_hit |= _ship_torp_collision(objs[ENT_OBJ], ent_torps)   # 3. ENT vs own torps
+    torp_hit |= _ship_torp_collision(objs[KLN_OBJ], ent_torps)   # 4. KLN vs ENT torps
+    torp_hit |= _ship_torp_collision(objs[KLN_OBJ], kln_torps)   # 5. KLN vs own torps
+    torp_hit |= _torp_torp_collision(ent_torps, kln_torps)        # 6. torp vs torp
+    torp_hit |= _planet_collision(state)                          # 7. planet vs torps
 
-    # 3. Enterprise ship vs own torpedoes (self-hit is possible)
-    _ship_torp_collision(objs[ENT_OBJ], ent_torps)
-
-    # 4. Klingon ship vs Enterprise torpedoes
-    _ship_torp_collision(objs[KLN_OBJ], ent_torps)
-
-    # 5. Klingon ship vs own torpedoes (self-hit is possible)
-    _ship_torp_collision(objs[KLN_OBJ], kln_torps)
-
-    # 6. Enterprise torpedoes vs Klingon torpedoes
-    _torp_torp_collision(ent_torps, kln_torps)
-
-    # 7. Planet vs all active objects
-    _planet_collision(state)
+    if torp_hit:
+        state.sound_flag |= TORP_HIT_SOUND
 
 
 def check_death(state: GameState) -> int:

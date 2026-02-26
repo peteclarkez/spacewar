@@ -74,7 +74,7 @@ def _launch_explosion_particles(state: GameState, ship_idx: int) -> None:
     for i in range(HYPER_PARTICLES):
         p = state.hyper_particles[p_start + i]
         a = (i / HYPER_PARTICLES) * 2 * _math.pi
-        speed = _random.uniform(0.3, 3.5)
+        speed = _random.uniform(0.15, 1.8)
         p.x = float(ship.x)
         p.y = float(ship.y)
         p.vx = _math.cos(a) * speed

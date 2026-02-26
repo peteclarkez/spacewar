@@ -106,6 +106,7 @@ PHASER_SOUND: int = 0x02
 PHOTON_SOUND: int = 0x04
 EXPLOSION_SOUND: int = 0x08
 HYPER_SOUND: int = 0x10
+TORP_HIT_SOUND: int = 0x20
 PHASER_SOUND_RAMP: int = 8    # Phaser pitch step counter max
 LOW_SHIELD_LIMIT: int = 16    # Below this → warning sound activates
 
@@ -164,7 +165,7 @@ HYPER_DURATION: int = 64      # Ticks for hyperspace animation (split 50/50 expa
 HYPER_PHASE: int = 32         # Ticks per expand/contract phase (HYPER_DURATION // 2)
 HYPER_PARTICLES: int = 32     # Particles per ship
 EXPLOSION_FRAMES: int = 8     # Number of explosion animation frames
-SHIP_EXPLOSION_TICKS: int = 40  # exps value set on ship death (≈0.55 s at 73 fps)
+SHIP_EXPLOSION_TICKS: int = 100  # exps value set on ship death (≈1.37 s at 73 fps)
 
 # ---------------------------------------------------------------------------
 # Attract mode
