@@ -7,3 +7,4 @@ gemini*
 *.pyc
 .vscode
 *.egg-info
+.coverage
