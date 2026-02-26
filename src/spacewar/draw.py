@@ -72,7 +72,7 @@ _PLANET_COLOR = _WHITE
 _STAR_COLOR = _DIM
 
 # Neon glow colours (--neon / --scale 3 mode); core is always _WHITE
-_NEON_ENT      = (0,   220, 255)   # electric cyan
+_NEON_ENT      = (0,    80, 255)   # electric blue
 _NEON_KLN      = (255, 120,   0)   # orange
 _NEON_ETOR     = (0,   255, 100)   # green
 _NEON_KTOR     = (255,  50,  50)   # red
@@ -472,10 +472,6 @@ def draw_energy_bars(surface: pygame.Surface, state: GameState) -> None:
 
     # Enterprise — left side
     s_color = _RED if ent.shields < LOW_SHIELD_LIMIT else _GREEN
-    _bar(margin, bar_w, ent.shields, STARTING_SHIELDS, s_color)
-    _bar(margin, bar_w, ent.energy, STARTING_ENERGY, _CYAN)   # overlay energy
-
-    # Separate S/E bars
     _bar(margin,          bar_w, ent.shields, STARTING_SHIELDS, s_color)
     _bar(margin + bar_w + 4, bar_w, ent.energy, STARTING_ENERGY, _CYAN)
 
