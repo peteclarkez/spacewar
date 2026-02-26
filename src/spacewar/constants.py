@@ -12,6 +12,11 @@ VIRTUAL_H: int = 200          # MAX_Y_AXIS — virtual pixels tall
 SCREEN_W: int = 640           # Physical window width
 SCREEN_H: int = 480           # Physical window height (Y doubled)
 Y_SCALE: int = 2              # Each virtual row → 2 screen rows
+# Canonical game surface dimensions (the intermediate render target).
+# All draw/phaser/attract code bounds-checks against these values, which is
+# correct because game_surface is always exactly GAME_W × GAME_H.
+GAME_W: int = SCREEN_W        # 640
+GAME_H: int = SCREEN_H        # 480
 
 # ---------------------------------------------------------------------------
 # Physics                              (GENERAL.EQU / PLAYINT.EQU)

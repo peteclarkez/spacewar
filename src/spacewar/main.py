@@ -15,13 +15,14 @@ Loop order (mirrors Play_Interrupt + main loop in MAIN.ASM):
   8. Death check → handle death
   9. Draw game frame
   10. HUD (energy bars, function keys)
-  11. Flip display
+  11. Scale game_surface → screen and flip display
 
 Entry point: main()
 """
 
 from __future__ import annotations
 
+import argparse
 import sys
 
 import pygame
@@ -113,18 +114,81 @@ def handle_death(dead_idx: int, state: GameState) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Display scaling helpers
+# ---------------------------------------------------------------------------
+
+def _parse_args() -> argparse.Namespace:
+    """Parse --scale N and --2x arguments.
+
+    Returns a Namespace with attribute ``scale: int`` (default 1).
+    """
+    parser = argparse.ArgumentParser(
+        description='SpaceWar v1.72 (1985 B. Seiler) — Python/Pygame recreation'
+    )
+    parser.add_argument(
+        '--scale', type=int, default=1, metavar='N',
+        help='Window size multiplier (1=640×480, 2=1280×960, etc.)',
+    )
+    parser.add_argument(
+        '--2x', dest='two_x', action='store_true', default=False,
+        help='Alias for --scale 2',
+    )
+    parser.add_argument(
+        '--altkeys', action='store_true', default=False,
+        help='Replace right-player numpad controls with UIO/JKL/M,. layout',
+    )
+    args = parser.parse_args()
+    if args.two_x:
+        args.scale = 2
+    if args.scale < 1:
+        parser.error('--scale must be >= 1')
+    return args
+
+
+def _compute_letterbox(win_w: int, win_h: int) -> tuple[int, int, int, int]:
+    """Return (dest_x, dest_y, dest_w, dest_h) for scaling 640×480 into the window.
+
+    Maintains the 640:480 aspect ratio.  Black bars fill any remaining area.
+    """
+    scale = min(win_w / SCREEN_W, win_h / SCREEN_H)
+    dest_w = int(SCREEN_W * scale)
+    dest_h = int(SCREEN_H * scale)
+    dest_x = (win_w - dest_w) // 2
+    dest_y = (win_h - dest_h) // 2
+    return dest_x, dest_y, dest_w, dest_h
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
 def main() -> None:
     """Initialise pygame and run the game loop."""
+    args = _parse_args()
+
     pygame.init()
-    screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
+
+    win_w = SCREEN_W * args.scale
+    win_h = SCREEN_H * args.scale
+
+    # RESIZABLE lets the user drag-resize; aspect ratio is maintained via
+    # letterboxing in the scaling blit at the bottom of the loop.
+    screen = pygame.display.set_mode((win_w, win_h), pygame.RESIZABLE)
     pygame.display.set_caption('SPACEWAR  v1.72  (1985 B. SEILER)')
     clock = pygame.time.Clock()
 
+    # Intermediate 640×480 render target.  ALL rendering functions write here.
+    # This surface is never resized; the scaling blit below handles any window
+    # size changes without touching any draw/phaser/attract code.
+    game_surface = pygame.Surface((SCREEN_W, SCREEN_H))
+
+    # Pre-allocate a scaled surface; only reallocated when the window changes size.
+    _, _, dw, dh = _compute_letterbox(win_w, win_h)
+    scaled_surface = pygame.Surface((dw, dh))
+
     # Initialise game state
     state = new_game_state()
+    state.alt_keys = args.altkeys
     seed_random(state.rng_state)
     state.star_positions = generate_stars(state.rng_state)
     bg = create_background(state.star_positions)
@@ -158,67 +222,79 @@ def main() -> None:
         # --- Attract mode ---
         if state.game_mode == MODE_ATTRACT:
             pending_death = -1
-            mode = run_attract_tick(state, attract, screen, key_state)
+            mode = run_attract_tick(state, attract, game_surface, key_state)
             # Function keys active during attract
             process_function_keys(state, key_state)
-            draw_attract_screen(screen, state, attract)
-            draw_function_keys(screen, state)
-            pygame.display.flip()
-            continue
+            draw_attract_screen(game_surface, state, attract)
+            draw_function_keys(game_surface, state)
 
-        # --- Play mode ---
+        else:
+            # --- Play mode ---
 
-        # If a death explosion finished, now reset and switch to attract
-        if pending_death >= 0:
-            ship = state.objects[pending_death]
-            if ship.eflg == EFLG_INACTIVE:
-                reset_game_objects(state)
-                state.game_mode = MODE_ATTRACT
-                pending_death = -1
-                continue
+            # If a death explosion finished, reset and switch to attract.
+            # Use 'continue'-equivalent: skip the rest of the play block so the
+            # scaling blit still runs (shows the last drawn frame for one tick).
+            if pending_death >= 0:
+                ship = state.objects[pending_death]
+                if ship.eflg == EFLG_INACTIVE:
+                    reset_game_objects(state)
+                    state.game_mode = MODE_ATTRACT
+                    pending_death = -1
+                    # Fall through to scaling blit with last game_surface content.
 
-        # Phaser erase must happen at tick PHASER_ERASE (before new draw)
-        ent = state.objects[ENT_OBJ]
-        kln = state.objects[KLN_OBJ]
+            if state.game_mode == MODE_PLAY:
+                # Phaser erase must happen at tick PHASER_ERASE (before new draw)
+                ent = state.objects[ENT_OBJ]
+                kln = state.objects[KLN_OBJ]
 
-        if ent.phaser_state == PHASER_ERASE:
-            erase_phaser_enterprise(state, screen)
-            ent.phaser_state -= 1   # advance past PHASER_ERASE; physics skips it
-        if kln.phaser_state == PHASER_ERASE:
-            erase_phaser_klingon(state, screen)
-            kln.phaser_state -= 1
+                if ent.phaser_state == PHASER_ERASE:
+                    erase_phaser_enterprise(state, game_surface)
+                    ent.phaser_state -= 1   # advance past PHASER_ERASE; physics skips it
+                if kln.phaser_state == PHASER_ERASE:
+                    erase_phaser_klingon(state, game_surface)
+                    kln.phaser_state -= 1
 
-        # Key / AI processing (pass screen so phasers can be drawn)
-        # Skip input during death explosion so the ship can't be controlled
-        if pending_death < 0:
-            process_enterprise_keys(state, key_state, screen)
-            process_klingon_keys(state, key_state, screen)
-        process_function_keys(state, key_state)
+                # Key / AI processing (pass game_surface so phasers can be drawn)
+                # Skip input during death explosion so the ship can't be controlled
+                if pending_death < 0:
+                    process_enterprise_keys(state, key_state, game_surface)
+                    process_klingon_keys(state, key_state, game_surface)
+                process_function_keys(state, key_state)
 
-        # Physics tick (also decrements exps for all exploding objects)
-        run_physics_tick(state)
+                # Physics tick (also decrements exps for all exploding objects)
+                run_physics_tick(state)
 
-        # Collision detection (skip while death explosion is playing)
-        if pending_death < 0:
-            check_all_collisions(state)
+                # Collision detection (skip while death explosion is playing)
+                if pending_death < 0:
+                    check_all_collisions(state)
 
-            # Death check — only trigger once per death
-            dead = check_death(state)
-            if dead >= 0:
-                handle_death(dead, state)
-                pending_death = dead
+                    # Death check — only trigger once per death
+                    dead = check_death(state)
+                    if dead >= 0:
+                        handle_death(dead, state)
+                        pending_death = dead
 
-        # Sound
-        tick_sound(state, sounds)
+                # Sound
+                tick_sound(state, sounds)
 
-        # Draw
-        draw_game_frame(screen, bg, state)
-        # Restore phaser beams wiped by the background blit
-        redraw_phaser_enterprise(state, screen)
-        redraw_phaser_klingon(state, screen)
-        draw_energy_bars(screen, state)
-        draw_function_keys(screen, state)
+                # Draw
+                draw_game_frame(game_surface, bg, state)
+                # Restore phaser beams wiped by the background blit
+                redraw_phaser_enterprise(state, game_surface)
+                redraw_phaser_klingon(state, game_surface)
+                draw_energy_bars(game_surface, state)
+                draw_function_keys(game_surface, state)
 
+        # --- Scaling blit (runs every frame regardless of mode) ---
+        cur_w, cur_h = screen.get_size()
+        dest_x, dest_y, dest_w, dest_h = _compute_letterbox(cur_w, cur_h)
+        # Reallocate scaled_surface only when the window size changes
+        if scaled_surface.get_size() != (dest_w, dest_h):
+            scaled_surface = pygame.Surface((dest_w, dest_h))
+        # Nearest-neighbour scale into pre-allocated surface (no per-frame alloc)
+        pygame.transform.scale(game_surface, (dest_w, dest_h), scaled_surface)
+        screen.fill((0, 0, 0))   # black letterbox bars
+        screen.blit(scaled_surface, (dest_x, dest_y))
         pygame.display.flip()
 
     pygame.quit()

@@ -88,6 +88,10 @@ _GAME_KEYS = [
     pygame.K_KP7, pygame.K_KP8, pygame.K_KP9,
     pygame.K_KP4, pygame.K_KP5, pygame.K_KP6,
     pygame.K_KP1, pygame.K_KP2, pygame.K_KP3,
+    # Klingon controls (--altkeys: UIO/JKL/M,.)
+    pygame.K_u, pygame.K_i, pygame.K_o,
+    pygame.K_j, pygame.K_k, pygame.K_l,
+    pygame.K_m, pygame.K_COMMA, pygame.K_PERIOD,
     # Function keys
     pygame.K_F1, pygame.K_F2, pygame.K_F3, pygame.K_F4,
     pygame.K_F5, pygame.K_F6, pygame.K_F7, pygame.K_F8,
@@ -282,7 +286,9 @@ def process_klingon_keys(
 ) -> None:
     """Handle Klingon controls or route to robot AI.
 
-    Mirrors kln_keys in KEYS.ASM.
+    Mirrors kln_keys in KEYS.ASM.  Supports two key layouts:
+      default  — numpad 7-9 / 4-6 / 1-3
+      altkeys  — UIO / JKL / M,. (enabled with --altkeys at launch)
     """
     if state.auto_flag & AUTO_KLN_BIT:
         _auto_klingon(state, surface)
@@ -294,47 +300,70 @@ def process_klingon_keys(
 
     p = key_state.pressed
 
-    # Rotation (numpad 4/6)
+    if state.alt_keys:
+        # --altkeys layout: UIO / JKL / M,.
+        k_phaser    = pygame.K_u
+        k_cloak     = pygame.K_i
+        k_torpedo   = pygame.K_o
+        k_rot_ccw   = pygame.K_j
+        k_thrust    = pygame.K_k
+        k_rot_cw    = pygame.K_l
+        k_shld_enrg = pygame.K_m
+        k_hyper     = pygame.K_COMMA
+        k_enrg_shld = pygame.K_PERIOD
+    else:
+        # Default numpad layout
+        k_phaser    = pygame.K_KP7
+        k_cloak     = pygame.K_KP8
+        k_torpedo   = pygame.K_KP9
+        k_rot_ccw   = pygame.K_KP4
+        k_thrust    = pygame.K_KP5
+        k_rot_cw    = pygame.K_KP6
+        k_shld_enrg = pygame.K_KP1
+        k_hyper     = pygame.K_KP2
+        k_enrg_shld = pygame.K_KP3
+
+    # Rotation
     ship.rotate = 0
-    if p.get(pygame.K_KP4):
+    if p.get(k_rot_ccw):
         ship.rotate = -ROTATE_RATE
-    elif p.get(pygame.K_KP6):
+    elif p.get(k_rot_cw):
         ship.rotate = ROTATE_RATE
 
-    # Thrust (numpad 5)
-    if p.get(pygame.K_KP5):
+    # Thrust
+    if p.get(k_thrust):
         ship.flags |= THRUST_BIT
     else:
         ship.flags &= ~THRUST_BIT
 
-    # Cloak (numpad 8)
-    if p.get(pygame.K_KP8):
+    # Cloak
+    if p.get(k_cloak):
         ship.flags |= CLOAK_BIT
     else:
         ship.flags &= ~CLOAK_BIT
 
-    # Phaser (numpad 7)
-    if key_state.just_pressed.get(pygame.K_KP7):
+    # Phaser
+    if key_state.just_pressed.get(k_phaser):
         if surface is not None:
             from .phaser import fire_phaser_klingon
             fire_phaser_klingon(state, surface)
 
-    # Photon torpedo (numpad 9)
-    if p.get(pygame.K_KP9):
+    # Photon torpedo
+    if p.get(k_torpedo):
         fire_klingon_torpedo(state)
     else:
         ship.fire &= ~TORP_FIRE_BIT
 
-    # Hyperspace (numpad 2)
-    if key_state.just_pressed.get(pygame.K_KP2):
+    # Hyperspace
+    if key_state.just_pressed.get(k_hyper):
         _activate_hyperspace(state, KLN_OBJ)
     else:
         ship.fire &= ~HYPER_FIRE_BIT
 
-    # Energy transfer (numpad 1/3)
-    if p.get(pygame.K_KP1):
+    # Energy transfer
+    if p.get(k_shld_enrg):
         _transfer_shields_to_energy(ship, state.blink)
-    if p.get(pygame.K_KP3):
+    if p.get(k_enrg_shld):
         _transfer_energy_to_shields(ship, state.blink)
 
 

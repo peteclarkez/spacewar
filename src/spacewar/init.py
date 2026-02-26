@@ -158,6 +158,9 @@ class GameState:
     # 6-byte PRNG state buffer (Jim Butterfield routine, STARS.ASM)
     rng_state: list[int] = field(default_factory=lambda: [0] * 6)
 
+    # --altkeys: replace right-player numpad controls with UIO/JKL/M,. layout
+    alt_keys: bool = False
+
 
 # ---------------------------------------------------------------------------
 # Initialisation helpers

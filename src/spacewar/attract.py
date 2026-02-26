@@ -322,7 +322,7 @@ def draw_attract_screen(
     elif idx == 1:
         _draw_instructions(surface)
     elif idx == 2:
-        _draw_key_grid(surface)
+        _draw_key_grid(surface, state)
     else:
         _draw_user_supported(surface)
 
@@ -456,6 +456,19 @@ _RIGHT_KEYS: list[tuple[str, str, str]] = [
     ('3', 'SHIELD',  'ENERGY'),
 ]
 
+# --altkeys layout: UIO / JKL / M,.
+_RIGHT_KEYS_ALT: list[tuple[str, str, str]] = [
+    ('U', 'FIRE',    'PHASERS'),
+    ('I', '',        'CLOAK'),
+    ('O', 'FIRE',    'PHOTONS'),
+    ('J', 'ROTATE',  'CCW'),
+    ('K', 'IMPULSE', 'ENGINES'),
+    ('L', 'ROTATE',  'CW'),
+    ('M', 'WEAPON',  'ENERGY'),
+    (',', 'HYPER',   'SPACE'),
+    ('.', 'SHIELD',  'ENERGY'),
+]
+
 # Grid geometry.  Two 3-column grids are laid out symmetrically:
 #   margin(40) + left_grid(3×CELL_W) + gap + right_grid(3×CELL_W) + margin(40)
 _CELL_W = 78
@@ -494,14 +507,16 @@ def _draw_key_cell(
         surface.blit(s2, (x + (_CELL_W - s2.get_width()) // 2, y + 47))
 
 
-def _draw_key_grid(surface: pygame.Surface) -> None:
+def _draw_key_grid(surface: pygame.Surface, state) -> None:
     """Attract screen 2: key-binding grid.
 
     Mirrors key_instructions in ATTRACT.ASM.  Two 3×3 grids of bordered cells
-    (left player QWEASDZXC, right player keypad 789456123) with ship-icon
-    decorations above each grid header, as in the original.
+    (left player QWEASDZXC, right player keypad 789456123 or UIO/JKL/M,. with
+    --altkeys) with ship-icon decorations above each grid header.
     """
     from .pictures import get_enterprise_sprite, get_klingon_sprite
+
+    right_keys = _RIGHT_KEYS_ALT if state.alt_keys else _RIGHT_KEYS
 
     # --- Title bar ---
     _centred(surface, 'G A M E    K E Y S', 12, _WHITE, 20)
@@ -528,7 +543,7 @@ def _draw_key_grid(surface: pygame.Surface) -> None:
                        key_label, line1, line2)
 
     # --- Right 3×3 grid ---
-    for idx, (key_label, line1, line2) in enumerate(_RIGHT_KEYS):
+    for idx, (key_label, line1, line2) in enumerate(right_keys):
         row, col = divmod(idx, 3)
         _draw_key_cell(surface,
                        _RX + col * _CELL_W, grid_y + row * _CELL_H,
