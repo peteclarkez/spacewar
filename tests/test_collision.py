@@ -284,3 +284,142 @@ class TestCheckDeath:
         state = new_game_state()
         result = check_death(state)
         assert result == -1
+
+    def test_inactive_ship_not_checked(self):
+        """An inactive ship with negative shields does not count as dead."""
+        state = new_game_state()
+        state.objects[ENT_OBJ].eflg = EFLG_INACTIVE
+        state.objects[ENT_OBJ].shields = -5
+        result = check_death(state)
+        assert result == -1
+
+
+class TestShipShipCollisionInactiveGuard:
+    def test_inactive_ent_skips_collision(self):
+        """Collision is skipped when Enterprise is inactive."""
+        state = new_game_state()
+        ent = state.objects[ENT_OBJ]
+        kln = state.objects[KLN_OBJ]
+        ent.x, ent.y = 100, 50
+        kln.x, kln.y = 101, 50
+        ent.vx, ent.vy = 4, 0
+        kln.vx, kln.vy = -2, 0
+        ent.eflg = EFLG_INACTIVE
+        kln.eflg = EFLG_ACTIVE
+        _ship_ship_collision(state)
+        # Velocities must not have been swapped
+        assert ent.vx == 4
+        assert kln.vx == -2
+
+    def test_inactive_kln_skips_collision(self):
+        state = new_game_state()
+        ent = state.objects[ENT_OBJ]
+        kln = state.objects[KLN_OBJ]
+        ent.x, ent.y = 100, 50
+        kln.x, kln.y = 101, 50
+        ent.vx, ent.vy = 4, 0
+        kln.vx, kln.vy = -2, 0
+        ent.eflg = EFLG_ACTIVE
+        kln.eflg = EFLG_INACTIVE
+        _ship_ship_collision(state)
+        assert ent.vx == 4
+        assert kln.vx == -2
+
+
+class TestShipShipBounceDy:
+    def test_bounce_negative_dy(self):
+        """When ent is above kln (dy < 0), ent moves up and kln moves down."""
+        state = new_game_state()
+        ent = state.objects[ENT_OBJ]
+        kln = state.objects[KLN_OBJ]
+        # ent above kln (smaller y) so dy = ent.y - kln.y < 0
+        ent.x, ent.y = 100, 48
+        kln.x, kln.y = 100, 52
+        ent.eflg = kln.eflg = EFLG_ACTIVE
+        _ship_ship_collision(state)
+        assert ent.y < 48    # pushed further up
+        assert kln.y > 52    # pushed further down
+
+
+class TestShipTorpInactiveShip:
+    def test_inactive_ship_skips_check(self):
+        """An inactive ship is not checked against torpedoes."""
+        state = new_game_state()
+        ship = state.objects[ENT_OBJ]
+        ship.x, ship.y = 100, 50
+        ship.shields = STARTING_SHIELDS
+        ship.eflg = EFLG_INACTIVE
+
+        torp = state.objects[KLN_TORP_START]
+        torp.x, torp.y = 101, 50
+        torp.eflg = EFLG_ACTIVE
+
+        _ship_torp_collision(ship, [(KLN_TORP_START, torp)])
+
+        assert ship.shields == STARTING_SHIELDS
+        assert torp.eflg == EFLG_ACTIVE
+
+
+class TestTorpTorpInactiveGuards:
+    def test_inactive_et_skipped(self):
+        """Inactive ent torpedo does not trigger torp-torp check."""
+        state = new_game_state()
+        et = state.objects[ENT_TORP_START]
+        kt = state.objects[KLN_TORP_START]
+        et.x, et.y = 100, 50
+        et.eflg = EFLG_INACTIVE   # inactive — should be skipped
+        kt.x, kt.y = 101, 50
+        kt.eflg = EFLG_ACTIVE
+
+        _torp_torp_collision(
+            [(ENT_TORP_START, et)],
+            [(KLN_TORP_START, kt)],
+        )
+        assert kt.eflg == EFLG_ACTIVE   # klingon torp untouched
+
+    def test_inactive_kt_skipped(self):
+        """Inactive kln torpedo does not collide with active ent torpedo."""
+        state = new_game_state()
+        et = state.objects[ENT_TORP_START]
+        kt = state.objects[KLN_TORP_START]
+        et.x, et.y = 100, 50
+        et.eflg = EFLG_ACTIVE
+        kt.x, kt.y = 101, 50
+        kt.eflg = EFLG_INACTIVE   # inactive — should be skipped
+
+        _torp_torp_collision(
+            [(ENT_TORP_START, et)],
+            [(KLN_TORP_START, kt)],
+        )
+        assert et.eflg == EFLG_ACTIVE   # ent torp untouched
+
+
+class TestCheckAllCollisionsIntegration:
+    def test_ship_torp_hit_via_check_all(self):
+        """check_all_collisions: kln torpedo close to ent ship → shield damage."""
+        state = new_game_state()
+        ent = state.objects[ENT_OBJ]
+        ent.x, ent.y = 200, 100
+        ent.shields = STARTING_SHIELDS
+
+        kt = state.objects[KLN_TORP_START]
+        kt.x, kt.y = 201, 100
+        kt.eflg = EFLG_ACTIVE
+
+        check_all_collisions(state)
+
+        assert ent.shields == STARTING_SHIELDS - PHOTON_DAMAGE
+        assert kt.eflg == EFLG_EXPLODING
+
+    def test_no_collision_when_far_apart(self):
+        """check_all_collisions: no effect when all objects are far apart."""
+        state = new_game_state()
+        ent = state.objects[ENT_OBJ]
+        ent.x, ent.y = 100, 50
+        ent.shields = STARTING_SHIELDS
+
+        kln = state.objects[KLN_OBJ]
+        kln.x, kln.y = 500, 150
+
+        check_all_collisions(state)
+        assert ent.shields == STARTING_SHIELDS
