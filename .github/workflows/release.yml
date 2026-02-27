@@ -122,13 +122,16 @@ jobs:
           path: artifacts
 
       - name: Install butler
-        uses: josephbisch/setup-butler@v1
+        run: |
+          curl -L -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip butler.zip
+          chmod +x butler
 
       - name: Push to itch.io
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
         run: |
           TAG="${{ github.ref_name }}"
-          butler push artifacts/linux/spacewar-linux.tar.gz   $ITCH_PROJECT:linux   --userversion "$TAG"
-          butler push artifacts/windows/spacewar-windows.zip  $ITCH_PROJECT:windows --userversion "$TAG"
-          butler push artifacts/macos/spacewar-macos.tar.gz   $ITCH_PROJECT:macos   --userversion "$TAG"
+          ./butler push artifacts/linux/spacewar-linux.tar.gz   $ITCH_PROJECT:linux   --userversion "$TAG"
+          ./butler push artifacts/windows/spacewar-windows.zip  $ITCH_PROJECT:windows --userversion "$TAG"
+          ./butler push artifacts/macos/spacewar-macos.tar.gz   $ITCH_PROJECT:macos   --userversion "$TAG"
