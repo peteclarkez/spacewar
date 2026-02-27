@@ -58,6 +58,11 @@ from .constants import (
 )
 from .trig import atan_approx
 from .stars import random_next
+from .joystick import (
+    BTN_PHASER, BTN_CLOAK, BTN_PHOTON_X, BTN_PHOTON,
+    BTN_HYPERSPACE_Y, BTN_HYPERSPACE,
+    BTN_SELECT, BTN_START, BTN_RS_CLICK,
+)
 
 _PLANET_AVOID_RANGE = 40  # Manhattan half-width of robot danger zone (virtual px)
 from .torpedo import fire_enterprise_torpedo, fire_klingon_torpedo
@@ -225,10 +230,12 @@ def process_enterprise_keys(
     state: GameState,
     key_state: KeyState,
     surface=None,
+    joy=None,
 ) -> None:
     """Handle Enterprise controls or route to robot AI.
 
     Mirrors ent_keys in KEYS.ASM.
+    joy: optional JoystickState for player-1 gamepad input.
     """
     if state.auto_flag & AUTO_ENT_BIT:
         _auto_enterprise(state, surface)
@@ -240,47 +247,55 @@ def process_enterprise_keys(
 
     p = key_state.pressed
 
-    # Rotation
+    # Rotation — left stick only
     ship.rotate = 0
-    if p.get(pygame.K_a):
+    if p.get(pygame.K_a) or (joy is not None and joy.rotate_left()):
         ship.rotate = -ROTATE_RATE
-    elif p.get(pygame.K_d):
+    elif p.get(pygame.K_d) or (joy is not None and joy.rotate_right()):
         ship.rotate = ROTATE_RATE
 
-    # Thrust (impulse)
-    if p.get(pygame.K_s):
+    # Thrust — left trigger held
+    if p.get(pygame.K_s) or (joy is not None and joy.thrust()):
         ship.flags |= THRUST_BIT
     else:
         ship.flags &= ~THRUST_BIT
 
-    # Cloak
-    if p.get(pygame.K_w):
+    # Cloak — B button (1) held
+    if p.get(pygame.K_w) or (joy is not None and joy.button(BTN_CLOAK)):
         ship.flags |= CLOAK_BIT
     else:
         ship.flags &= ~CLOAK_BIT
 
-    # Phaser
-    if key_state.just_pressed.get(pygame.K_q):
+    # Phaser — right trigger edge OR A button (0) edge
+    joy_phaser = joy is not None and (
+        joy.just_pressed_rt or joy.just_pressed_buttons.get(BTN_PHASER, False)
+    )
+    if key_state.just_pressed.get(pygame.K_q) or joy_phaser:
         if surface is not None:
             from .phaser import fire_phaser_enterprise
             fire_phaser_enterprise(state, surface)
 
-    # Photon torpedo
-    if p.get(pygame.K_e):
+    # Photon torpedo — RB (7) held OR X button (3) held
+    if p.get(pygame.K_e) or (joy is not None and (joy.button(BTN_PHOTON) or joy.button(BTN_PHOTON_X))):
         fire_enterprise_torpedo(state)
     else:
-        ship.fire &= ~TORP_FIRE_BIT   # release debounce when key up
+        ship.fire &= ~TORP_FIRE_BIT   # release debounce when key/button up
 
-    # Hyperspace
-    if key_state.just_pressed.get(pygame.K_x):
+    # Hyperspace — LB (6) edge OR Y button (4) edge
+    joy_hyper = joy is not None and (
+        joy.just_pressed_buttons.get(BTN_HYPERSPACE, False) or
+        joy.just_pressed_buttons.get(BTN_HYPERSPACE_Y, False)
+    )
+    if key_state.just_pressed.get(pygame.K_x) or joy_hyper:
         _activate_hyperspace(state, ENT_OBJ)
     else:
         ship.fire &= ~HYPER_FIRE_BIT
 
-    # Energy transfer
-    if p.get(pygame.K_z):
+    # Shields→energy — right stick left held
+    if p.get(pygame.K_z) or (joy is not None and joy.right_stick_left()):
         _transfer_shields_to_energy(ship, state.blink)
-    if p.get(pygame.K_c):
+    # Energy→shields — right stick right held
+    if p.get(pygame.K_c) or (joy is not None and joy.right_stick_right()):
         _transfer_energy_to_shields(ship, state.blink)
 
 
@@ -292,12 +307,14 @@ def process_klingon_keys(
     state: GameState,
     key_state: KeyState,
     surface=None,
+    joy=None,
 ) -> None:
     """Handle Klingon controls or route to robot AI.
 
     Mirrors kln_keys in KEYS.ASM.  Supports two key layouts:
       default  — numpad 7-9 / 4-6 / 1-3
       altkeys  — UIO / JKL / M,. (enabled with --altkeys at launch)
+    joy: optional JoystickState for player-2 gamepad input.
     """
     if state.auto_flag & AUTO_KLN_BIT:
         _auto_klingon(state, surface)
@@ -332,47 +349,55 @@ def process_klingon_keys(
         k_hyper     = pygame.K_KP2
         k_enrg_shld = pygame.K_KP3
 
-    # Rotation
+    # Rotation — left stick only
     ship.rotate = 0
-    if p.get(k_rot_ccw):
+    if p.get(k_rot_ccw) or (joy is not None and joy.rotate_left()):
         ship.rotate = -ROTATE_RATE
-    elif p.get(k_rot_cw):
+    elif p.get(k_rot_cw) or (joy is not None and joy.rotate_right()):
         ship.rotate = ROTATE_RATE
 
-    # Thrust
-    if p.get(k_thrust):
+    # Thrust — left trigger held
+    if p.get(k_thrust) or (joy is not None and joy.thrust()):
         ship.flags |= THRUST_BIT
     else:
         ship.flags &= ~THRUST_BIT
 
-    # Cloak
-    if p.get(k_cloak):
+    # Cloak — B button (1) held
+    if p.get(k_cloak) or (joy is not None and joy.button(BTN_CLOAK)):
         ship.flags |= CLOAK_BIT
     else:
         ship.flags &= ~CLOAK_BIT
 
-    # Phaser
-    if key_state.just_pressed.get(k_phaser):
+    # Phaser — right trigger edge OR A button (0) edge
+    joy_phaser = joy is not None and (
+        joy.just_pressed_rt or joy.just_pressed_buttons.get(BTN_PHASER, False)
+    )
+    if key_state.just_pressed.get(k_phaser) or joy_phaser:
         if surface is not None:
             from .phaser import fire_phaser_klingon
             fire_phaser_klingon(state, surface)
 
-    # Photon torpedo
-    if p.get(k_torpedo):
+    # Photon torpedo — RB (7) held OR X button (3) held
+    if p.get(k_torpedo) or (joy is not None and (joy.button(BTN_PHOTON) or joy.button(BTN_PHOTON_X))):
         fire_klingon_torpedo(state)
     else:
         ship.fire &= ~TORP_FIRE_BIT
 
-    # Hyperspace
-    if key_state.just_pressed.get(k_hyper):
+    # Hyperspace — LB (6) edge OR Y button (4) edge
+    joy_hyper = joy is not None and (
+        joy.just_pressed_buttons.get(BTN_HYPERSPACE, False) or
+        joy.just_pressed_buttons.get(BTN_HYPERSPACE_Y, False)
+    )
+    if key_state.just_pressed.get(k_hyper) or joy_hyper:
         _activate_hyperspace(state, KLN_OBJ)
     else:
         ship.fire &= ~HYPER_FIRE_BIT
 
-    # Energy transfer
-    if p.get(k_shld_enrg):
+    # Shields→energy — right stick left held
+    if p.get(k_shld_enrg) or (joy is not None and joy.right_stick_left()):
         _transfer_shields_to_energy(ship, state.blink)
-    if p.get(k_enrg_shld):
+    # Energy→shields — right stick right held
+    if p.get(k_enrg_shld) or (joy is not None and joy.right_stick_right()):
         _transfer_energy_to_shields(ship, state.blink)
 
 
@@ -380,11 +405,12 @@ def process_klingon_keys(
 # Function key processing
 # ---------------------------------------------------------------------------
 
-def process_function_keys(state: GameState, key_state: KeyState) -> int:
+def process_function_keys(state: GameState, key_state: KeyState, joysticks=None) -> int:
     """Handle F1–F8 toggles.  Returns new game mode (may be unchanged).
 
     Mirrors function key handling split between KEYS.ASM and MAIN.ASM.
     Uses just_pressed so each press is handled once.
+    joysticks: optional list of JoystickState — handles D-pad/select/start/RS-click.
     """
     jp = key_state.just_pressed
     mode = state.game_mode
@@ -415,6 +441,39 @@ def process_function_keys(state: GameState, key_state: KeyState) -> int:
 
     if jp.get(pygame.K_F8):          # Toggle sound
         state.sound_enable = not state.sound_enable
+
+    # Joystick function key events (any connected controller)
+    for i, joy in enumerate(joysticks or []):
+        # D-Pad Up → F5 (planet toggle)
+        if joy.just_pressed_hat_up:
+            state.planet_enable ^= PLANET_BIT
+
+        # D-Pad Down → F8 (sound toggle)
+        if joy.just_pressed_hat_dn:
+            state.sound_enable = not state.sound_enable
+
+        # Select → F1 (attract/exit)
+        if joy.just_pressed_buttons.get(BTN_SELECT, False):
+            mode = MODE_ATTRACT
+
+        # Start → F2 (attract: start game) / F7 (game: toggle pause)
+        if joy.just_pressed_buttons.get(BTN_START, False):
+            if mode == MODE_ATTRACT:
+                from .init import reset_game_objects
+                reset_game_objects(state)
+                state.pause_enable = False
+                mode = MODE_PLAY
+            else:
+                state.pause_enable = not state.pause_enable
+
+        # Right stick click → toggle own robot AI
+        #   Player 1 (i=0) → F3 (Enterprise robot)
+        #   Player 2 (i=1) → F4 (Klingon robot)
+        if joy.just_pressed_buttons.get(BTN_RS_CLICK, False):
+            if i == 0:
+                state.auto_flag ^= AUTO_ENT_BIT
+            else:
+                state.auto_flag ^= AUTO_KLN_BIT
 
     state.game_mode = mode
     return mode

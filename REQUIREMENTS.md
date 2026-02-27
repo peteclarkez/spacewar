@@ -429,3 +429,86 @@ Exact values extracted from the v1.50 Assembly source for reference when tuning 
 | `HYPER_PARTICLES` | 32 | physics.py | Particles per ship (hyperspace + death explosion) |
 | `SHIP_EXPLOSION_TICKS` | 40 | main.py | `ship.exps` value on death (~0.55 s at 73 fps) |
 | `TORPEDO_SPAWN_OFFSET` | `cos/sin >> 11` | torpedo.py | Spawn offset from ship (~15 px max, > `SHIP_TO_TORP_RANGE`) |
+
+---
+
+## 11. Optional Modernisation Extras
+
+> **These features are NOT part of the faithful 1985 recreation.** They are quality-of-life and visual enhancements added to the Python/Pygame port. All original game logic, physics, and behaviour defined in sections 0–10 remain unchanged when these extras are active.
+
+---
+
+### 11.1 Window Scaling & Resizing
+
+*   **`--scale N`** — Launch the window at `N × 640 × N × 480` (e.g. `--scale 2` = 1280×960). Default `N = 1`.
+*   **`--2x`** — Convenience alias for `--scale 2`.
+*   **`--scale 3` easter egg** — 3× window **and** activates Neon Colour Mode automatically (see §11.2).
+*   **Runtime resize** — The window is `RESIZABLE`. On any resize the game **letterboxes** into the new dimensions, maintaining the 640:480 aspect ratio. Black bars fill any remaining area.
+*   **Rendering** — All game logic writes to a fixed 640×480 surface; a single nearest-neighbour `pygame.transform.scale` blit maps it to the screen each frame. No draw code is affected.
+
+---
+
+### 11.2 Neon Colour Mode
+
+Activated by `--neon` or automatically by `--scale 3`.
+
+*   **Visual effect:** Each sprite is drawn with a **white-hot core** (255, 255, 255) and a **coloured glow halo** (8 surrounding neighbours at 50% brightness). This is a two-pass blit: halo pass first, core pass second.
+*   **Colour palette:**
+
+| Element | Glow Colour | RGB |
+|:---|:---|:---|
+| Enterprise ship | Electric cyan | `(0, 220, 255)` |
+| Klingon ship | Orange | `(255, 120, 0)` |
+| Enterprise torpedoes | Green | `(0, 255, 100)` |
+| Klingon torpedoes | Red | `(255, 50, 50)` |
+| Planet | Purple (colour-shifted, no halo) | `(160, 80, 255)` |
+| Stars (background) | Deep blue | `(20, 20, 70)` |
+| Enterprise hyper/death particles | Blue | `(0, 160, 255)` |
+| Klingon hyper/death particles | Orange | `(255, 80, 0)` |
+
+*   **Phasers** — unchanged (white thin line; low visual impact).
+*   **Planet** — colour-shifted to purple; no halo (too many pixels for the per-neighbour approach to look good).
+*   **Normal mode** — all elements remain monochrome white-on-black (original aesthetic).
+
+---
+
+### 11.3 Xbox-Style Gamepad Support
+
+Up to **two controllers** are supported simultaneously (Player 1 on joystick index 0, Player 2 on joystick index 1). Both controllers use the same button layout.
+
+*   **Activation** — Joysticks are initialised automatically if present. No flag required.
+*   **`--altkeys`** — Keyboard-only option (replaces Klingon numpad with UIO/JKL/M,. layout). Unrelated to gamepad.
+
+#### Verified Button & Axis Mapping (Xbox-style controller)
+
+| Input | Action | Keyboard Equivalent | Mode |
+|:---|:---|:---|:---|
+| Left stick X (left) | Rotate CCW | A / KP4 | Held |
+| Left stick X (right) | Rotate CW | D / KP6 | Held |
+| Left trigger (axis 5, +) | Thrust | S / KP5 | Held |
+| **A** button (0) | Fire phasers | Q / KP7 | Edge |
+| **B** button (1) | Cloak | W / KP8 | Held |
+| **X** button (3) | Fire photon torpedo | E / KP9 | Held |
+| **Y** button (4) | Hyperspace | X / KP2 | Edge |
+| LB (button 6) | Hyperspace (alt) | X / KP2 | Edge |
+| RB (button 7) | Fire photon torpedo (alt) | E / KP9 | Held |
+| Right trigger (axis 4, −) | Fire phasers (alt) | Q / KP7 | Edge |
+| Right stick X (left) | Shields → Energy | Z / KP1 | Held |
+| Right stick X (right) | Energy → Shields | C / KP3 | Held |
+| D-Pad Up | Toggle planet | F5 | Edge |
+| D-Pad Down | Toggle sound | F8 | Edge |
+| Select (button 10) | Attract / exit | F1 | Edge |
+| Start (button 11) — attract screen | Start game | F2 | Edge |
+| Start (button 11) — in-game | Pause / unpause | F7 | Edge |
+| Right stick click (button 14) | Toggle own robot AI | F3 (P1) / F4 (P2) | Edge |
+
+> **Note:** Axis and button indices are verified against a specific Xbox-style controller. Other controllers may differ. Adjust the constants at the top of `src/spacewar/joystick.py` (`BTN_*`, `AXIS_*`) to match your hardware.
+
+#### Axis Polarity Notes
+
+| Axis | Description | Direction |
+|:---|:---|:---|
+| 0 | Left stick X | Left = −1, Right = +1 |
+| 5 | Left trigger | Rest ≈ 0, pressed → +1 |
+| 2 | Right stick X | Left = −1, Right = +1 |
+| 4 | Right trigger | Rest ≈ 0, pressed → **−1** (inverted) |

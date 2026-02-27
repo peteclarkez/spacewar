@@ -41,6 +41,7 @@ from .constants import (
 from .init import new_game_state, reset_game_objects, GameState
 from .stars import seed_random, generate_stars
 from .keys import KeyState, update_key_state, process_enterprise_keys, process_klingon_keys, process_function_keys
+from .joystick import init_joysticks
 from .physics import run_physics_tick
 from .collision import check_all_collisions, check_death
 from .phaser import (
@@ -203,6 +204,9 @@ def main() -> None:
     # Sound
     sounds = init_sound()
 
+    # Joystick / gamepad (must be after pygame.init())
+    joysticks = init_joysticks()
+
     # Key tracking
     key_state = KeyState()
 
@@ -225,13 +229,15 @@ def main() -> None:
 
         # Refresh key state from pygame snapshot
         update_key_state(key_state)
+        for joy in joysticks:
+            joy.update()
 
         # --- Attract mode ---
         if state.game_mode == MODE_ATTRACT:
             pending_death = -1
             mode = run_attract_tick(state, attract, game_surface, key_state)
             # Function keys active during attract
-            process_function_keys(state, key_state)
+            process_function_keys(state, key_state, joysticks)
             draw_attract_screen(game_surface, state, attract)
             draw_function_keys(game_surface, state)
 
@@ -264,9 +270,11 @@ def main() -> None:
                 # Key / AI processing (pass game_surface so phasers can be drawn)
                 # Skip input during death explosion so the ship can't be controlled
                 if pending_death < 0:
-                    process_enterprise_keys(state, key_state, game_surface)
-                    process_klingon_keys(state, key_state, game_surface)
-                process_function_keys(state, key_state)
+                    joy0 = joysticks[0] if len(joysticks) > 0 else None
+                    joy1 = joysticks[1] if len(joysticks) > 1 else None
+                    process_enterprise_keys(state, key_state, game_surface, joy=joy0)
+                    process_klingon_keys(state, key_state, game_surface, joy=joy1)
+                process_function_keys(state, key_state, joysticks)
 
                 # Physics tick (also decrements exps for all exploding objects)
                 run_physics_tick(state)
