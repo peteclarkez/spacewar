@@ -1,10 +1,6 @@
 """pictures.py — sprite and animation data.
 
-Mirrors PICTURES.ASM / PICT16.ASM.
-
-All sprite data is transcribed directly from PICT16.ASM (the CGA/16-colour
-variant), which was designed for square-ish CGA pixels.  Sprites are rendered
-at 1:1 screen pixels (no Y-scale) so they appear correct on our 640×480 screen.
+Sprites are rendered at 1:1 screen pixels (no Y-scale) so they appear correct on our 640×480 screen.
 
 Sprite formats
 --------------
@@ -35,7 +31,7 @@ get_planet_frame(n)          -> list[int]   32 rows, 32-bit
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
-# Explosion frames — transcribed from PICT16.ASM (EXPD)
+# Explosion frames
 # 8 frames × 8 rows × 8 bits.  Bit 7 = leftmost pixel.
 # ---------------------------------------------------------------------------
 _EXPLOSION_FRAMES: list[list[int]] = [
@@ -50,7 +46,7 @@ _EXPLOSION_FRAMES: list[list[int]] = [
 ]
 
 # ---------------------------------------------------------------------------
-# Enterprise ship sprites — transcribed from PICT16.ASM (ENTR)
+# Enterprise ship sprites
 # 16 rotation frames × 16 rows × 16 bits.  Bit 15 = leftmost pixel.
 # Frame 0 = angle 0 (pointing right), each frame +22.5° clockwise.
 # ---------------------------------------------------------------------------
@@ -74,7 +70,7 @@ _ENTERPRISE_FRAMES: list[list[int]] = [
 ]
 
 # ---------------------------------------------------------------------------
-# Klingon ship sprites — transcribed from PICT16.ASM (KLIN)
+# Klingon ship sprites
 # 16 rotation frames × 16 rows × 16 bits.  Bit 15 = leftmost pixel.
 # ---------------------------------------------------------------------------
 _KLINGON_FRAMES: list[list[int]] = [
@@ -97,7 +93,7 @@ _KLINGON_FRAMES: list[list[int]] = [
 ]
 
 # ---------------------------------------------------------------------------
-# Enterprise torpedo sprites — transcribed from PICT16.ASM (ETOR)
+# Enterprise torpedo sprites
 # 8 rotation frames × 8 rows × 8 bits.  Bit 7 = leftmost pixel.
 # Frame 0 = pointing right, each frame +45°.
 # ---------------------------------------------------------------------------
@@ -113,7 +109,7 @@ _ENTERPRISE_TORP_FRAMES: list[list[int]] = [
 ]
 
 # ---------------------------------------------------------------------------
-# Klingon torpedo sprites — transcribed from PICT16.ASM (KTOR)
+# Klingon torpedo sprites
 # 8 rotation frames × 8 rows × 8 bits.  Bit 7 = leftmost pixel.
 # ---------------------------------------------------------------------------
 _KLINGON_TORP_FRAMES: list[list[int]] = [
@@ -128,7 +124,7 @@ _KLINGON_TORP_FRAMES: list[list[int]] = [
 ]
 
 # ---------------------------------------------------------------------------
-# Planet animation — transcribed from PICT16.ASM (PLANET_PICTURES)
+# Planet animation
 # 16 frames × 32 rows × 32 bits.  Bit 31 = leftmost pixel.
 # ---------------------------------------------------------------------------
 _PLANET_FRAMES: list[list[int]] = [
@@ -254,7 +250,7 @@ _PLANET_FRAMES: list[list[int]] = [
 def get_enterprise_sprite(angle: int) -> list[int]:
     """Return Enterprise sprite for 0-255 angle (16 rows × 16-bit).
 
-    Frame selection mirrors DRAW.ASM Xor_Ent:
+    Frame selection:
         add bl, 8       ; round to nearest frame
         and bx, 0F0H    ; 16 frames (step 16)
         shr bx, 4       ; frame index
@@ -266,8 +262,7 @@ def get_enterprise_sprite(angle: int) -> list[int]:
 def get_klingon_sprite(angle: int) -> list[int]:
     """Return Klingon sprite for 0-255 angle (16 rows × 16-bit).
 
-    Same rounding formula as get_enterprise_sprite (DRAW.ASM Xor_Kln uses
-    identical code path via xore200).
+    Same rounding formula as get_enterprise_sprite (identical code path via xore200).
     """
     idx = ((angle + 8) & 0xFF) >> 4
     return _KLINGON_FRAMES[idx]
@@ -276,7 +271,7 @@ def get_klingon_sprite(angle: int) -> list[int]:
 def get_enterprise_torp_sprite(angle: int) -> list[int]:
     """Return Enterprise torpedo sprite for 0-255 angle (8 rows × 8-bit).
 
-    Frame selection mirrors DRAW.ASM Xor_Torp:
+    Frame selection:
         add bl, 16      ; round to nearest frame
         and bx, 0E0H    ; 8 frames (step 32)
         shr bx, 5       ; frame index

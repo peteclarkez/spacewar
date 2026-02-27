@@ -1,7 +1,5 @@
 """torpedo.py — photon torpedo firing logic.
 
-Mirrors TORP.ASM.
-
 Each ship has 7 torpedo slots.  A torpedo is launched by finding the first
 inactive slot, initialising it with the ship's position + facing offset and
 velocity + facing impulse, and marking it active.
@@ -36,7 +34,6 @@ from .init import GameObject, GameState
 def find_free_torpedo(state: GameState, start: int, end: int) -> int | None:
     """Return the index of the first inactive torpedo slot, or None.
 
-    Mirrors the 'find free slot' loop in TORP.ASM.
     start, end — half-open range of torpedo indices to search.
     """
     for i in range(start, end):
@@ -48,7 +45,6 @@ def find_free_torpedo(state: GameState, start: int, end: int) -> int | None:
 def _launch_torpedo(ship: GameObject, torp: GameObject) -> None:
     """Copy ship state into torpedo slot and apply launch impulse.
 
-    Mirrors the torpedo initialisation in TORP.ASM:
     - Position = ship position + ~7px in the facing direction
     - Velocity  = ship velocity + ~3 px/tick in the facing direction
     """
@@ -119,10 +115,10 @@ def _fire(state: GameState, ship_idx: int, torp_start: int, torp_end: int) -> No
 # ---------------------------------------------------------------------------
 
 def fire_enterprise_torpedo(state: GameState) -> None:
-    """Fire one Enterprise photon torpedo.  Mirrors TORP.ASM fire_ent."""
+    """Fire one Enterprise photon torpedo."""
     _fire(state, ENT_OBJ, ENT_TORP_START, ENT_TORP_END)
 
 
 def fire_klingon_torpedo(state: GameState) -> None:
-    """Fire one Klingon photon torpedo.  Mirrors TORP.ASM fire_kln."""
+    """Fire one Klingon photon torpedo."""
     _fire(state, KLN_OBJ, KLN_TORP_START, KLN_TORP_END)

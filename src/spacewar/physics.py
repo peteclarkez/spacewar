@@ -1,7 +1,5 @@
 """physics.py — per-tick game physics (the Play_Interrupt handler).
 
-Mirrors PLAYINT.ASM.
-
 run_physics_tick(state) is called once per frame at TARGET_FPS=73 Hz.
 All timing is gated off the 8-bit BLINK counter (incremented each tick).
 
@@ -50,7 +48,7 @@ from .init import GameObject, GameState
 # ---------------------------------------------------------------------------
 
 def _update_angles(state: GameState) -> None:
-    """Apply rotation delta to both ships.  Mirrors angle update in PLAYINT.ASM."""
+    """Apply rotation delta to both ships."""
     for idx in (ENT_OBJ, KLN_OBJ):
         obj = state.objects[idx]
         if obj.eflg == EFLG_ACTIVE:
@@ -62,10 +60,7 @@ def _update_angles(state: GameState) -> None:
 # ---------------------------------------------------------------------------
 
 def _add_accel_to_vel(obj: GameObject, accel_x: int, accel_y: int) -> None:
-    """Add signed acceleration to fractional velocity with carry propagation.
-
-    Mirrors 'add XVELL[si], ax / adc XVEL[si], 0' in PLAYINT.ASM.
-    """
+    """Add signed acceleration to fractional velocity with carry propagation."""
     new_vx_frac = obj.vx_frac + accel_x
     carry_x = new_vx_frac >> 16
     obj.vx_frac = new_vx_frac & 0xFFFF
@@ -96,7 +91,6 @@ def _clamp_velocity(obj: GameObject) -> None:
 def apply_thrust(obj: GameObject, blink: int) -> None:
     """Apply thrust impulse in current facing direction.
 
-    Mirrors impulse handling in PLAYINT.ASM:
     - Acceleration = cos/sin(angle) >> ACCEL_SCALE (divide by 8)
     - Energy drains 1 unit every IMPULSE_TIME=32 ticks
     """
@@ -117,7 +111,7 @@ def apply_thrust(obj: GameObject, blink: int) -> None:
 
 
 def apply_cloak_drain(obj: GameObject, blink: int) -> None:
-    """Drain energy while cloaking.  Mirrors cloak logic in PLAYINT.ASM."""
+    """Drain energy while cloaking."""
     if not (obj.flags & CLOAK_BIT):
         return
     if (blink & (CLOAK_TIME - 1)) == 0:
@@ -134,7 +128,6 @@ def apply_cloak_drain(obj: GameObject, blink: int) -> None:
 def update_position(obj: GameObject) -> None:
     """Integrate velocity into position for one object, applying screen wrap.
 
-    Mirrors the position update loop in PLAYINT.ASM.
     Uses 32-bit fixed-point arithmetic: (x:x_frac) += (vx:vx_frac)
     Screen wraps at WRAP_FACTOR border.
     """
@@ -197,7 +190,6 @@ def _tick_torpedo_energy(state: GameState) -> None:
     """Drain 1 energy from each active torpedo every PHOTON_TIME=16 ticks.
 
     When a torpedo's energy reaches 0, it explodes.
-    Mirrors PLAYINT.ASM torpedo timer.
     """
     if (state.blink & (PHOTON_TIME - 1)) != 0:
         return
@@ -221,8 +213,6 @@ def _tick_phaser_states(state: GameState) -> None:
       PHASER_IDLE (255) → stays at 255
       PHASER_ERASE (20) → skip (main loop handles erase this tick)
       all other values → decrement; when reaching 0 → reset to PHASER_IDLE
-
-    Mirrors the phaser timer in PLAYINT.ASM.
     """
     for idx in (ENT_OBJ, KLN_OBJ):
         obj = state.objects[idx]
@@ -246,7 +236,6 @@ def _tick_shield_warning(state: GameState) -> None:
     """Toggle warning sound when shields are low.
 
     Fires every WARNING_TIME=32 ticks.
-    Mirrors the shield warning logic in PLAYINT.ASM.
     """
     if (state.blink & (WARNING_TIME - 1)) != 0:
         return
@@ -364,13 +353,10 @@ def _tick_hyperspace(state: GameState) -> None:
 def _release_debounce(state: GameState) -> None:
     """Clear fire debounce flags each tick so held keys don't re-fire immediately.
 
-    The ASM clears TORP_FIRE_BIT when the key is released; here we simply
-    clear it each tick (key processing in keys.py sets it on press).
     NOTE: The debounce is set on fire and cleared here; keys.py must re-set
     it before this runs if the key is still held.
     """
     # Debounce is actually cleared in keys.py when the key is released.
-    # This function is a placeholder for future ASM-accurate debounce.
     pass
 
 
@@ -379,10 +365,7 @@ def _release_debounce(state: GameState) -> None:
 # ---------------------------------------------------------------------------
 
 def run_physics_tick(state: GameState) -> None:
-    """Run one full physics tick — called once per frame at TARGET_FPS.
-
-    Mirrors Play_Interrupt in PLAYINT.ASM (the timer-driven ISR).
-    """
+    """Run one full physics tick — called once per frame at TARGET_FPS."""
     # 1. Advance blink counter (8-bit wrap)
     state.blink = (state.blink + 1) & 0xFF
 

@@ -1,11 +1,5 @@
 """stars.py — PRNG and starfield generation.
 
-Mirrors STARS.ASM.
-
-The 6-byte shift-feedback PRNG is Jim Butterfield's routine, used verbatim
-from the original Assembly.  Seeding uses the PC timer; here we use
-Python's time module for the same effect.
-
 Public API
 ----------
 seed_random(state)                        — seed PRNG from system time
@@ -21,38 +15,18 @@ from .constants import (
     VIRTUAL_W, VIRTUAL_H, WRAP_FACTOR,
 )
 
-# Star counts from STARS.ASM (CGA = 512, Hercules = 1024)
+# Star count (CGA mode)
 STAR_COUNT: int = 512
 
 
 # ---------------------------------------------------------------------------
-# PRNG — Jim Butterfield 6-byte shift-feedback (STARS.ASM)
+# PRNG — 6-byte shift-feedback pseudorandom number generator
 # ---------------------------------------------------------------------------
 # The rng_state is a list[int] of 6 bytes (indices 0-5).
-# RND buffer: indices 0-5 correspond to RND[0]..RND[5].
-#
-# ASM routine:
-#   stc
-#   mov al, RND+1
-#   adc al, RND+4
-#   adc al, RND+5
-#   mov RND[0], al
-#   di = 4
-# rmov:
-#   mov al, RND[di]
-#   mov RND[di+1], al
-#   dec di
-#   jns rmov          ; loop di = 4..0 (RND[1]→[2], [2]→[3], [3]→[4], [4]→[5])
-#   ; wait — this shifts RND[0..4] → RND[1..5]
-#   mov ah, RND+2
-#   ret
 
 
 def seed_random(rng: list[int]) -> None:
-    """Seed the 6-byte PRNG from the system clock.
-
-    Mirrors Seed_Random in STARS.ASM which reads the PC BIOS timer.
-    """
+    """Seed the 6-byte PRNG from the system clock."""
     t = int(time.monotonic() * 1000) & 0xFFFFFFFF
     rng[1] = t & 0xFF
     rng[2] = (t >> 8) & 0xFF
@@ -65,8 +39,7 @@ def seed_random(rng: list[int]) -> None:
 def random_next(rng: list[int]) -> int:
     """Generate next pseudo-random number in range 0..65535.
 
-    Mirrors Random in STARS.ASM (Jim Butterfield routine).
-    Returns ax = (rng[2] << 8) | rng[0] after the shift.
+    Returns (rng[2] << 8) | rng[0] after the shift.
     """
     # stc → carry = 1
     carry = 1
@@ -89,10 +62,7 @@ def random_next(rng: list[int]) -> int:
 
 
 def random_x(rng: list[int]) -> int:
-    """Return a random x in [WRAP_FACTOR, VIRTUAL_W - WRAP_FACTOR).
-
-    Mirrors Randx in STARS.ASM: loops until value is in safe range.
-    """
+    """Return a random x in [WRAP_FACTOR, VIRTUAL_W - WRAP_FACTOR)."""
     while True:
         val = random_next(rng) & (1024 - 1)  # get under 1024
         if WRAP_FACTOR <= val < VIRTUAL_W - WRAP_FACTOR:
@@ -100,10 +70,7 @@ def random_x(rng: list[int]) -> int:
 
 
 def random_y(rng: list[int]) -> int:
-    """Return a random y in [WRAP_FACTOR, VIRTUAL_H - WRAP_FACTOR).
-
-    Mirrors Randy in STARS.ASM: loops until value is in safe range.
-    """
+    """Return a random y in [WRAP_FACTOR, VIRTUAL_H - WRAP_FACTOR)."""
     while True:
         val = random_next(rng) & (512 - 1)  # get under 512
         if WRAP_FACTOR <= val < VIRTUAL_H - WRAP_FACTOR:
@@ -113,7 +80,6 @@ def random_y(rng: list[int]) -> int:
 def generate_stars(rng: list[int]) -> list[tuple[int, int]]:
     """Generate STAR_COUNT star positions using the PRNG.
 
-    Mirrors Stars in STARS.ASM.
     Returns list of (x, y) virtual coordinates.
     """
     positions: list[tuple[int, int]] = []

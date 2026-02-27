@@ -1,8 +1,6 @@
 """init.py — game object dataclasses and state initialisation.
 
-Mirrors INIT.ASM.  The ASM stores all object fields as parallel arrays
-(XDIS[], YDIS[], XVEL[], …) indexed by object number.  Here we use
-dataclasses for clarity while keeping exactly the same field names.
+Object fields are stored as dataclasses; the same field names are used throughout.
 
 Object table layout (16 slots):
   0        — Enterprise ship
@@ -26,15 +24,12 @@ from .constants import (
 
 
 # ---------------------------------------------------------------------------
-# GameObject — mirrors per-slot ASM parallel arrays
+# GameObject — one game object slot
 # ---------------------------------------------------------------------------
 
 @dataclass
 class GameObject:
-    """One entry in the 16-slot object table.
-
-    Field names mirror ASM variable prefixes (XDIS→x, XVEL→vx, etc.).
-    """
+    """One entry in the 16-slot object table."""
     # Position — 32-bit fixed-point: integer word + fractional word
     x: int = 0          # XDIS — virtual x coordinate (0..VIRTUAL_W-1)
     y: int = 0          # YDIS — virtual y coordinate (0..VIRTUAL_H-1)
@@ -97,24 +92,21 @@ class HyperParticle:
 
 @dataclass
 class GameState:
-    """All mutable global game state.
-
-    Mirrors the ASM's module-level variables spread across multiple .ASM files.
-    """
+    """All mutable global game state."""
     # 16-slot object table
     objects: list[GameObject] = field(default_factory=lambda: [GameObject() for _ in range(NUM_OBJECTS)])
 
     # Master tick counter — 8-bit wrap (0..255); all timing gates off this
     blink: int = 0
 
-    # BIT0=planet visible/collision, BIT1=gravity active  (PLANET.EQU)
+    # BIT0=planet visible/collision, BIT1=gravity active
     planet_enable: int = 0
 
     # Planet animation frame (0..15)
     planet_state: int = 0
 
     # Sound state
-    sound_flag: int = 0       # Active sound bitmask (SOUND.EQU flags)
+    sound_flag: int = 0       # Active sound bitmask
     sound_enable: bool = True  # F8 toggle
     sound_state: int = 0      # Phaser ramp counter
 
@@ -155,7 +147,7 @@ class GameState:
     # Pre-generated star positions (list of (x, y) tuples)
     star_positions: list[tuple[int, int]] = field(default_factory=list)
 
-    # 6-byte PRNG state buffer (Jim Butterfield routine, STARS.ASM)
+    # 6-byte PRNG state buffer
     rng_state: list[int] = field(default_factory=lambda: [0] * 6)
 
     # --altkeys: replace right-player numpad controls with UIO/JKL/M,. layout
@@ -170,7 +162,7 @@ class GameState:
 # ---------------------------------------------------------------------------
 
 def _reset_ship(obj: GameObject, x: int, y: int, angle: int) -> None:
-    """Reset a ship object to its starting state.  Mirrors INIT.ASM init_ship."""
+    """Reset a ship object to its starting state."""
     obj.x = x
     obj.y = y
     obj.x_frac = 0
@@ -199,7 +191,7 @@ def _reset_ship(obj: GameObject, x: int, y: int, angle: int) -> None:
 
 
 def _reset_torpedo(obj: GameObject) -> None:
-    """Reset a torpedo slot to inactive.  Mirrors INIT.ASM init_torp."""
+    """Reset a torpedo slot to inactive."""
     obj.x = 0
     obj.y = 0
     obj.x_frac = 0
@@ -225,8 +217,6 @@ def reset_game_objects(state: GameState) -> None:
 
     Also clears hyperspace/explosion particle state so no stale visual
     artefacts carry across games.
-
-    Mirrors INIT.ASM — called at the start of each new game and after death.
     """
     _reset_ship(state.objects[ENT_OBJ], ENT_START_X, ENT_START_Y, ENT_START_ANGLE)
     _reset_ship(state.objects[KLN_OBJ], KLN_START_X, KLN_START_Y, KLN_START_ANGLE)

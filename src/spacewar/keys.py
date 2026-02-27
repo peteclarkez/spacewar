@@ -1,8 +1,6 @@
 """keys.py — keyboard input and robot AI.
 
-Mirrors KEYS.ASM + KEYS.EQU + robot AI sections of MAIN.ASM.
-
-Key layout (from KEYS.EQU):
+Key layout:
   Enterprise:
     Q = phasers        W = cloak          E = photon torpedo
     A = rotate CCW     S = impulse (thrust) D = rotate CW
@@ -139,7 +137,6 @@ def update_key_state(key_state: KeyState) -> None:
 def _activate_hyperspace(state: GameState, ship_idx: int) -> None:
     """Begin hyperspace jump animation for ship_idx.
 
-    Mirrors the hyperspace initiation in MAIN.ASM:
     - Deduct HYPERSPACE_ENERGY
     - Choose a random destination now (so contraction phase knows where to go)
     - Launch 32 expansion particles (scatter outward from source)
@@ -234,7 +231,6 @@ def process_enterprise_keys(
 ) -> None:
     """Handle Enterprise controls or route to robot AI.
 
-    Mirrors ent_keys in KEYS.ASM.
     joy: optional JoystickState for player-1 gamepad input.
     """
     if state.auto_flag & AUTO_ENT_BIT:
@@ -311,7 +307,7 @@ def process_klingon_keys(
 ) -> None:
     """Handle Klingon controls or route to robot AI.
 
-    Mirrors kln_keys in KEYS.ASM.  Supports two key layouts:
+    Supports two key layouts:
       default  — numpad 7-9 / 4-6 / 1-3
       altkeys  — UIO / JKL / M,. (enabled with --altkeys at launch)
     joy: optional JoystickState for player-2 gamepad input.
@@ -408,7 +404,6 @@ def process_klingon_keys(
 def process_function_keys(state: GameState, key_state: KeyState, joysticks=None) -> int:
     """Handle F1–F8 toggles.  Returns new game mode (may be unchanged).
 
-    Mirrors function key handling split between KEYS.ASM and MAIN.ASM.
     Uses just_pressed so each press is handled once.
     joysticks: optional list of JoystickState — handles D-pad/select/start/RS-click.
     """
@@ -499,7 +494,7 @@ def _planet_avoidance_angle(state: GameState, ship) -> int | None:
 # ---------------------------------------------------------------------------
 
 def _auto_enterprise(state: GameState, surface=None) -> None:
-    """Enterprise robot AI.  Mirrors auto_ent in MAIN.ASM.
+    """Enterprise robot AI.
 
     Strategy:
       1. Balance energy (S↔E toward equality)
@@ -563,7 +558,7 @@ def _auto_enterprise(state: GameState, surface=None) -> None:
 # ---------------------------------------------------------------------------
 
 def _auto_klingon(state: GameState, surface=None) -> None:
-    """Klingon robot AI.  Mirrors auto_kln in MAIN.ASM.
+    """Klingon robot AI.
 
     Strategy:
       1. Always aim at Enterprise (update angle every tick)

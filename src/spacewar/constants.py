@@ -1,11 +1,8 @@
 """constants.py — all named game constants.
-
-Mirrors GENERAL.EQU, PLANET.EQU, PHASER.EQU, PLAYINT.EQU, SOUND.EQU, KEYS.EQU.
-No logic, no imports.  All values verified against v1.50 Assembly source.
 """
 
 # ---------------------------------------------------------------------------
-# Display / virtual coordinate space   (GENERAL.EQU)
+# Display / virtual coordinate space
 # ---------------------------------------------------------------------------
 VIRTUAL_W: int = 640          # MAX_X_AXIS — virtual pixels wide
 VIRTUAL_H: int = 200          # MAX_Y_AXIS — virtual pixels tall
@@ -19,7 +16,7 @@ GAME_W: int = SCREEN_W        # 640
 GAME_H: int = SCREEN_H        # 480
 
 # ---------------------------------------------------------------------------
-# Physics                              (GENERAL.EQU / PLAYINT.EQU)
+# Physics
 # ---------------------------------------------------------------------------
 WRAP_FACTOR: int = 8          # Margin at screen edges before wrap
 MAX_X_VEL: int = 8            # MAX_X_VELOCITY — clamp threshold
@@ -40,7 +37,7 @@ SWAP_TIME: int = 4            # Ticks between S↔E energy transfer pulses
 TARGET_FPS: int = 73          # 1,193,180 / 16,390 ≈ 72.8 Hz
 
 # ---------------------------------------------------------------------------
-# Starting positions                   (INIT.ASM / GENERAL.EQU)
+# Starting positions
 # ---------------------------------------------------------------------------
 # Enterprise starts at (MAX_X/4, (MAX_Y-16)/4)
 ENT_START_X: int = 160        # 640 / 4
@@ -53,13 +50,13 @@ KLN_START_Y: int = 138        # 3 * (200 - 16) / 4
 KLN_START_ANGLE: int = 128    # pointing left (180°)
 
 # ---------------------------------------------------------------------------
-# Energy / shields                     (INIT.ASM)
+# Energy / shields
 # ---------------------------------------------------------------------------
 STARTING_SHIELDS: int = 31    # ZSHLDS — initial shield energy
 STARTING_ENERGY: int = 127    # ZENRGY — initial dilithium energy (max)
 
 # ---------------------------------------------------------------------------
-# Planet                               (PLANET.EQU)
+# Planet
 # ---------------------------------------------------------------------------
 PLANET_X: int = 319           # (640/2) - 1
 PLANET_Y: int = 99            # (200/2) - 1
@@ -69,7 +66,7 @@ PLANET_RANGE: int = 16        # Manhattan collision radius
 PLANET_SIZE: int = 16         # Sprite half-width (pixels)
 
 # ---------------------------------------------------------------------------
-# Weapons — Phaser                     (PHASER.EQU)
+# Weapons — Phaser
 # ---------------------------------------------------------------------------
 PHASER_FIRE_ENERGY: int = 1   # Energy cost to fire
 PHASER_RANGE: int = 96        # Maximum ray length in virtual pixels
@@ -82,7 +79,7 @@ PHASER_DAMAGE: int = 2        # Shield damage per phaser hit
 PHASER_IDLE: int = 255        # ZPHST — phaser not firing
 
 # ---------------------------------------------------------------------------
-# Weapons — Torpedo                    (TORP.ASM / GENERAL.EQU)
+# Weapons — Torpedo
 # ---------------------------------------------------------------------------
 PHOTON_LAUNCH_ENERGY: int = 1 # Energy cost to launch one torpedo
 PHOTON_ENERGY: int = 40       # Energy given to torpedo at launch (ENRGY)
@@ -90,7 +87,7 @@ PHOTON_DAMAGE: int = 4        # Shield damage per torpedo hit
 HYPERSPACE_ENERGY: int = 8    # Energy cost to jump
 
 # ---------------------------------------------------------------------------
-# Collision ranges                     (CMPS.ASM)
+# Collision ranges
 # ---------------------------------------------------------------------------
 SHIP_TO_SHIP_RANGE: int = 16  # Manhattan radius for ship-ship collision
 SHIP_TO_TORP_RANGE: int = 8   # Manhattan radius for ship-torpedo collision
@@ -99,7 +96,7 @@ BOUNCE_FACTOR: int = 2        # Pixels ships are pushed apart on ship-ship hit
 PLANET_DAMAGE: int = 2        # Shield damage from planet contact
 
 # ---------------------------------------------------------------------------
-# Sound flags                          (SOUND.EQU)
+# Sound flags
 # ---------------------------------------------------------------------------
 WARNING_SOUND: int = 0x01
 PHASER_SOUND: int = 0x02
@@ -111,14 +108,14 @@ PHASER_SOUND_RAMP: int = 8    # Phaser pitch step counter max
 LOW_SHIELD_LIMIT: int = 16    # Below this → warning sound activates
 
 # ---------------------------------------------------------------------------
-# Robot AI probabilities               (MAIN.ASM)
+# Robot AI probabilities
 # ---------------------------------------------------------------------------
 PROB_IMPULSE: int = 16        # 1/16 chance of thrust per tick
 PROB_PHOTON: int = 8          # 1/8 chance of firing per tick (Klingon)
 PROB_HYPER: int = 1024        # 1/1024 chance of hyperspace per tick
 
 # ---------------------------------------------------------------------------
-# Object table indices                 (GENERAL.EQU word offsets ÷ 2)
+# Object table indices
 # ---------------------------------------------------------------------------
 ENT_OBJ: int = 0              # Enterprise ship
 KLN_OBJ: int = 8              # Klingon ship

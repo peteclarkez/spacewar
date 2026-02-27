@@ -1,12 +1,12 @@
 
-# Requirements: SpaceWar 1985 (v1.72) Faithful Recreation
-> Derived from: the original game manual (`spacewar.doc.txt`), Bill Seiler's v1.50 Assembly source code (1985), and reference screenshots.
+# Requirements: SpaceWar 1985 Faithful Recreation
+> Derived from: the original game manual (`spacewar.doc.txt`) and reference screenshots.
 
 ---
 
 ## 0. Sprite Reference (Pixel-Exact, Frame 0)
 
-All sprites are transcribed from `PICT16.ASM`. `#` = lit pixel, `.` = dark.
+Sprite pixel data below. `#` = lit pixel, `.` = dark.
 
 ### Enterprise — 16×16, frame 0 (angle 0, pointing right/East)
 ```
@@ -28,7 +28,7 @@ All sprites are transcribed from `PICT16.ASM`. `#` = lit pixel, `.` = dark.
 .....######.....
 ```
 
-### Klingon — 16×16, frame 8 (angle 128, pointing left/West)
+### Klingon — 16×16, frame 8 (angle 0, pointing right/East)
 ```
 ..........##....
 ......####..#...
@@ -107,7 +107,7 @@ All sprites are transcribed from `PICT16.ASM`. `#` = lit pixel, `.` = dark.
 ................................
 ................................
 ```
-> The planet's outer ring (rows 5–7 and 24–26) and the animated scanlines within the body are all sourced from `PLANET_PICTURES` in `PICT16.ASM`. The 16 animation frames vary only in the horizontal scanline positions inside the body.
+> The planet's outer ring (rows 5–7 and 24–26) has 16 animation frames that vary only in the horizontal scanline positions inside the body.
 
 ---
 
@@ -269,7 +269,7 @@ A ship is destroyed when its Shield value underflows below zero (damage pushes i
 *   The default non-playable state when no game is running.
 *   Displays the **"SPACEWAR" title** as individual letter blocks, which **explode apart and reform** in a looping animation.
 *   Cycles through the following screens in a loop:
-    1.  Copyright info (`COPYRIGHT © 1985 B SEILER`) and current scores.
+    1.  Title screen and current scores.
     2.  Game Instructions (text: object, weapons, defense, energy rules).
     3.  Key Instructions (graphical keyboard layout boxes).
     4.  User-Supported Software message.
@@ -377,53 +377,53 @@ The game tracks **16 objects** total in a unified table (indexed by word offset)
 
 ---
 
-## 10. Precise Numeric Constants (Source-Verified)
+## 10. Precise Numeric Constants
 
-Exact values extracted from the v1.50 Assembly source for reference when tuning the recreation.
+Verified game constants for reference when tuning the recreation.
 
-| Constant | Value | Source | Description |
-|:---|:---|:---|:---|
-| `MAX_X_AXIS` | 640 | GENERAL.EQU | Screen width (CGA) |
-| `MAX_Y_AXIS` | 200 | GENERAL.EQU | Screen height (CGA) |
-| `WRAP_FACTOR` | 8 | GENERAL.EQU | Screen-edge wrap overlap |
-| `MAX_X_VELOCITY` | 8 | GENERAL.EQU | Max velocity per axis |
-| `MAX_Y_VELOCITY` | 8 | GENERAL.EQU | Max velocity per axis |
-| `STAR_COUNT` | 512 | STARS.ASM | Stars on CGA display |
-| `PLANET_X` | 319 | PLANET.EQU | Planet centre X (640/2 - 1) |
-| `PLANET_Y` | 99 | PLANET.EQU | Planet centre Y (200/2 - 1) |
-| `PLANET_RANGE` | 16 | PLANET.EQU | Planet collision radius (pixels) |
-| `PLANET_TIME` | 16 | PLANET.EQU | Planet animation speed (ticks/frame) |
-| `ROTATE_RATE` | 2 | MAIN.ASM | Rotation speed (units/tick, 256/circle) |
-| `ACCEL_SCALE` | 3 | PLAYINT.ASM | Thrust accel right-shift (÷8) |
-| `FIRE_SCALE` | 2 | TORP.ASM | Torpedo velocity left-shift (×4) |
-| `HYPERSPACE_ENERGY` | 8 | MAIN.ASM | Hyperspace E-energy cost |
-| `PHOTON_LAUNCH_ENERGY` | 1 | TORP.ASM | Torpedo launch E-energy cost |
-| `PHOTON_ENERGY` | 40 | TORP.ASM | Torpedo starting energy (lifespan) |
-| `PHOTON_DAMAGE` | 4 | CMPS.ASM | Torpedo shield damage |
-| `PHASER_FIRE_ENERGY` | 1 | PHASER.EQU | Phaser E-energy cost |
-| `PHASER_RANGE` | 96 | PHASER.EQU | Phaser max length (pixels) |
-| `PHASER_ERASE` | 20 | PHASER.EQU | Phaser ray erase tick |
-| `PHASER_DELAY` | 24 | PHASER.EQU | Phaser cooldown (ticks) |
-| `PHASER_TO_OBJ_RANGE` | 8 | PHASER.EQU | Phaser hit-check radius (px, PoT) |
-| `PHASER_DAMAGE` | 2 | PHASER.EQU | Phaser shield damage |
-| `SHIP_TO_SHIP_RANGE` | 16 | CMPS.ASM | Ship collision range (pixels) |
-| `SHIP_TO_TORP_RANGE` | 8 | CMPS.ASM | Ship-torpedo hit range (pixels) |
-| `TORP_TO_TORP_RANGE` | 6 | CMPS.ASM | Torp-torp collision range (pixels) |
-| `BOUNCE_FACTOR` | 2 | CMPS.ASM | Ship-ship bounce separation (pixels) |
-| `PLANET_DAMAGE` | 2 | CMPS.ASM | Planet shield drain per check |
-| `LOW_SHIELD_LIMIT` | 16 | PLAYINT.ASM | Warning sound/blink threshold |
-| `SWAP_TIME` | 4 | MAIN.ASM | Energy transfer rate (ticks/unit) |
-| `IMPULSE_TIME` | 32 | PLAYINT.EQU | Thrust energy cost period (ticks) |
-| `CLOAK_TIME` | 32 | PLAYINT.EQU | Cloak energy cost period (ticks) |
-| `DILITHIUM_TIME` | 256 | PLAYINT.EQU | E-energy recharge period (ticks) |
-| `PHOTON_TIME` | 16 | PLAYINT.EQU | Torpedo energy drain period (ticks) |
-| `WARNING_TIME` | 32 | PLAYINT.EQU | Warning sound alternation (ticks) |
-| `PROB_IMPULSE` | 16 | MAIN.ASM | Robot thrust probability (1/N per tick) |
-| `PROB_PHOTON` | 8 | MAIN.ASM | Robot photon probability (1/N per tick) |
-| `PROB_HYPER` | 1024 | MAIN.ASM | Robot hyperspace probability (1/N per tick) |
-| `STARTING_SHIELDS` | 31 | INIT.ASM | Initial shield energy per ship |
-| `STARTING_ENERGY` | 127 | INIT.ASM | Initial E-energy per ship |
-| `GAME_TIMER_HZ` | ~72.8 | MAIN.ASM | Interrupt rate (1,193,180 / 16390) |
+| Constant | Value | Description |
+|:---|:---|:---|
+| `MAX_X_AXIS` | 640 | Screen width (CGA) |
+| `MAX_Y_AXIS` | 200 | Screen height (CGA) |
+| `WRAP_FACTOR` | 8 | Screen-edge wrap overlap |
+| `MAX_X_VELOCITY` | 8 | Max velocity per axis |
+| `MAX_Y_VELOCITY` | 8 | Max velocity per axis |
+| `STAR_COUNT` | 512 | Stars on CGA display |
+| `PLANET_X` | 319 | Planet centre X (640/2 - 1) |
+| `PLANET_Y` | 99 | Planet centre Y (200/2 - 1) |
+| `PLANET_RANGE` | 16 | Planet collision radius (pixels) |
+| `PLANET_TIME` | 16 | Planet animation speed (ticks/frame) |
+| `ROTATE_RATE` | 2 | Rotation speed (units/tick, 256/circle) |
+| `ACCEL_SCALE` | 3 | Thrust accel right-shift (÷8) |
+| `FIRE_SCALE` | 2 | Torpedo velocity left-shift (×4) |
+| `HYPERSPACE_ENERGY` | 8 | Hyperspace E-energy cost |
+| `PHOTON_LAUNCH_ENERGY` | 1 | Torpedo launch E-energy cost |
+| `PHOTON_ENERGY` | 40 | Torpedo starting energy (lifespan) |
+| `PHOTON_DAMAGE` | 4 | Torpedo shield damage |
+| `PHASER_FIRE_ENERGY` | 1 | Phaser E-energy cost |
+| `PHASER_RANGE` | 96 | Phaser max length (pixels) |
+| `PHASER_ERASE` | 20 | Phaser ray erase tick |
+| `PHASER_DELAY` | 24 | Phaser cooldown (ticks) |
+| `PHASER_TO_OBJ_RANGE` | 8 | Phaser hit-check radius (px, PoT) |
+| `PHASER_DAMAGE` | 2 | Phaser shield damage |
+| `SHIP_TO_SHIP_RANGE` | 16 | Ship collision range (pixels) |
+| `SHIP_TO_TORP_RANGE` | 8 | Ship-torpedo hit range (pixels) |
+| `TORP_TO_TORP_RANGE` | 6 | Torp-torp collision range (pixels) |
+| `BOUNCE_FACTOR` | 2 | Ship-ship bounce separation (pixels) |
+| `PLANET_DAMAGE` | 2 | Planet shield drain per check |
+| `LOW_SHIELD_LIMIT` | 16 | Warning sound/blink threshold |
+| `SWAP_TIME` | 4 | Energy transfer rate (ticks/unit) |
+| `IMPULSE_TIME` | 32 | Thrust energy cost period (ticks) |
+| `CLOAK_TIME` | 32 | Cloak energy cost period (ticks) |
+| `DILITHIUM_TIME` | 256 | E-energy recharge period (ticks) |
+| `PHOTON_TIME` | 16 | Torpedo energy drain period (ticks) |
+| `WARNING_TIME` | 32 | Warning sound alternation (ticks) |
+| `PROB_IMPULSE` | 16 | Robot thrust probability (1/N per tick) |
+| `PROB_PHOTON` | 8 | Robot photon probability (1/N per tick) |
+| `PROB_HYPER` | 1024 | Robot hyperspace probability (1/N per tick) |
+| `STARTING_SHIELDS` | 31 | Initial shield energy per ship |
+| `STARTING_ENERGY` | 127 | Initial E-energy per ship |
+| `GAME_TIMER_HZ` | ~72.8 | Interrupt rate (1,193,180 / 16390) |
 | `HYPER_DURATION` | 64 | physics.py | Total ticks for hyperspace animation |
 | `HYPER_PHASE` | 32 | physics.py | Ticks per expand/contract phase (`HYPER_DURATION / 2`) |
 | `HYPER_PARTICLES` | 32 | physics.py | Particles per ship (hyperspace + death explosion) |

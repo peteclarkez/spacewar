@@ -1,16 +1,5 @@
 """gravity.py — bowl (linear) gravity toward the planet centre.
 
-Mirrors GRAVITY.ASM.
-
-**** IMPORTANT ****
-The original game uses LINEAR ("bowl") gravity, NOT inverse-square.
-The ASM comment explicitly reads "*** ACCELERATION TABLE ***" and then
-calculates: accel = -(delta_to_centre) * 8  (left-shift by 3).
-
-The fractional velocity accumulators (vx_frac / vy_frac) receive the
-acceleration directly; the integer velocity words (vx / vy) accumulate
-carry from the fractional part when positions are integrated.
-
 Public API
 ----------
 apply_gravity(obj)          — one object, one tick
@@ -31,8 +20,6 @@ from .init import GameObject, GameState
 def apply_gravity(obj: GameObject) -> None:
     """Add one tick of bowl gravity to obj's fractional velocity.
 
-    Mirrors calc_gravity + Update_Gravity in GRAVITY.ASM.
-
     Formula:
         dx = obj.x - PLANET_X
         dy = obj.y - PLANET_Y
@@ -46,7 +33,7 @@ def apply_gravity(obj: GameObject) -> None:
     dy = obj.y - PLANET_Y
 
     # Acceleration = negative of delta, scaled by 8
-    accel_x = -(dx << 3)   # equivalent to ASM: shl bx,1 three times, then neg
+    accel_x = -(dx << 3)
     accel_y = -(dy << 3)
 
     # Add to fractional velocity with carry propagation
@@ -54,11 +41,7 @@ def apply_gravity(obj: GameObject) -> None:
 
 
 def _add_accel(obj: GameObject, accel_x: int, accel_y: int) -> None:
-    """Add signed acceleration to fractional velocity, propagating carry.
-
-    The ASM adds the 16-bit acceleration directly to XVELL/YVELL and then
-    uses ADC 0 to propagate carry/borrow to XVEL/YVEL.
-    """
+    """Adds signed acceleration to fractional velocity with carry propagation."""
     new_vx_frac = obj.vx_frac + accel_x
     carry_x = new_vx_frac >> 16          # −1, 0, or +1
     obj.vx_frac = new_vx_frac & 0xFFFF
@@ -78,7 +61,6 @@ def update_gravity_all(state: GameState) -> None:
     """Apply bowl gravity to every active object.
 
     Called each tick when planet_enable & GRAVITY_BIT is set.
-    Mirrors Update_Gravity loop in GRAVITY.ASM.
     """
     if not (state.planet_enable & GRAVITY_BIT):
         return

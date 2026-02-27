@@ -1,11 +1,9 @@
 """collision.py — collision detection and response.
 
-Mirrors CMPS.ASM.
-
 All collision detection uses Manhattan distance (NOT Euclidean):
     abs(dx) < range  AND  abs(dy) < range
 
-Collision order (exact ASM order):
+Collision order:
   1. Ship-ship:        Enterprise vs Klingon (range 16)
   2. Ent ship vs KLN torps  (range 8, PHOTON_DAMAGE=4)
   3. Ent ship vs ENT torps  (range 8, PHOTON_DAMAGE=4) — self-hit possible!
@@ -60,10 +58,9 @@ def _in_range_xy(x1: int, y1: int, x2: int, y2: int, r: int) -> bool:
 def _ship_ship_collision(state: GameState) -> None:
     """Handle Enterprise/Klingon ship-ship collision.
 
-    Mirrors cmps_ship_ship in CMPS.ASM.
     - Velocities halved and swapped (SAR = signed arithmetic right-shift)
     - Ships bounced apart by BOUNCE_FACTOR pixels
-    - NO shield damage (the ASM does NOT subtract shields here)
+    - NO shield damage
     """
     ent = state.objects[ENT_OBJ]
     kln = state.objects[KLN_OBJ]
@@ -113,7 +110,6 @@ def _ship_ship_collision(state: GameState) -> None:
 def _ship_torp_collision(ship: GameObject, torps: list[tuple[int, GameObject]]) -> bool:
     """Check one ship against a list of (index, torpedo) pairs.
 
-    Mirrors the cmps_ship_torp inner loop in CMPS.ASM.
     Ship loses PHOTON_DAMAGE shields per hit; torpedo set to EFLG_EXPLODING.
     Returns True if any hit occurred.
     """
@@ -142,7 +138,6 @@ def _torp_torp_collision(
 ) -> bool:
     """Check all Enterprise torps against all Klingon torps.
 
-    Mirrors cmps_torp_torp in CMPS.ASM.
     Both torpedoes set to EFLG_EXPLODING.
     Returns True if any collision occurred.
     """
@@ -169,7 +164,6 @@ def _torp_torp_collision(
 def _planet_collision(state: GameState) -> bool:
     """Check all active objects against the planet (if PLANET_BIT set).
 
-    Mirrors cmps_planet in CMPS.ASM.
     Ships: lose PLANET_DAMAGE shields.
     Torpedoes: explode immediately.
     Returns True if any torpedo hit the planet.
@@ -196,10 +190,7 @@ def _planet_collision(state: GameState) -> bool:
 # ---------------------------------------------------------------------------
 
 def check_all_collisions(state: GameState) -> None:
-    """Run all collision checks in ASM-identical order.
-
-    Mirrors the CMPS.ASM collision sequence.
-    """
+    """Run all collision checks."""
     objs = state.objects
 
     # Build torpedo lists for convenience
@@ -226,7 +217,6 @@ def check_death(state: GameState) -> int:
     """Check whether either ship has died (shields < 0).
 
     Returns ENT_OBJ, KLN_OBJ, or -1 (no death this tick).
-    Mirrors the death-check in MAIN.ASM: `test SHLDS+ENTOBJ, 080H`.
     """
     ent = state.objects[ENT_OBJ]
     kln = state.objects[KLN_OBJ]

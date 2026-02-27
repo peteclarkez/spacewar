@@ -1,9 +1,9 @@
 """trig.py — sine/cosine/atan lookup tables.
 
-Mirrors SIN.ASM.  The circle is divided into 256 steps (not degrees).
+The circle is divided into 256 steps (not degrees).
 Angle 0 = pointing right (+X), 64 = pointing down (+Y), 128 = left, 192 = up.
 
-SINE_TABLE: 256 signed 16-bit values transcribed verbatim from the ASM hex.
+SINE_TABLE: 256 signed 16-bit values (256-step circle).
 TAN_TABLE:  32-entry table used by robot AI for bearing approximation.
 
 Public API
@@ -16,7 +16,7 @@ atan_approx(dx,dy) -> int   0..255 bearing from (0,0) toward (dx,dy)
 import math
 
 # ---------------------------------------------------------------------------
-# Raw hex values from SIN.ASM — SINE_TABLE (256 × DW)
+# SINE_TABLE (256 × signed 16-bit values)
 # Signed 16-bit: values >= 0x8000 are negative.
 # ---------------------------------------------------------------------------
 _SINE_RAW = [
@@ -64,7 +64,7 @@ SINE_TABLE: list[int] = [v - 0x10000 if v >= 0x8000 else v for v in _SINE_RAW]
 assert len(SINE_TABLE) == 256, "SINE_TABLE must have exactly 256 entries"
 
 # ---------------------------------------------------------------------------
-# TAN_TABLE — 32-entry table from SIN.ASM for AI bearing calculation.
+# TAN_TABLE — 32-entry table for AI bearing calculation.
 # All values are positive (< 0x8000).
 # ---------------------------------------------------------------------------
 TAN_TABLE: list[int] = [
@@ -84,7 +84,6 @@ assert len(TAN_TABLE) == 32, "TAN_TABLE must have exactly 32 entries"
 def sin_lookup(angle: int) -> int:
     """Return SINE_TABLE[angle & 0xFF].
 
-    Mirrors SIN.ASM Sin: procedure.
     angle — 0-255 (any integer; masked to 8 bits).
     Returns signed value in range -32767..32767.
     """
@@ -94,7 +93,6 @@ def sin_lookup(angle: int) -> int:
 def cos_lookup(angle: int) -> int:
     """Return sin_lookup(angle + 64).
 
-    Mirrors SIN.ASM Cos: procedure — COS(X) = SIN(X + 90°).
     In the 256-step circle, 90° = 64 steps.
     """
     return SINE_TABLE[(angle + 64) & 0xFF]
@@ -103,7 +101,6 @@ def cos_lookup(angle: int) -> int:
 def atan_approx(dx: int, dy: int) -> int:
     """Return approximate bearing from origin toward (dx, dy) in 0-255 angle space.
 
-    Mirrors the bearing calculation used in MAIN.ASM auto_ent/auto_kln routines.
     Angle 0 = right (+X), 64 = down (+Y), 128 = left (−X), 192 = up (−Y).
 
     Uses math.atan2 converted to the 256-step circle.

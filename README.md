@@ -4,9 +4,9 @@
 
 ![Python/Pygame recreation — gameplay screenshot](docs/2025screenshots/01-gameplay.png)
 
-A faithful Python/Pygame recreation of Bill Seiler's **SpaceWar v1.72** (1985, DOS/CGA).
+A faithful Python/Pygame recreation of the classic **SpaceWar** DOS game (1985, CGA).
 
-Two ships battle in space near a gravitational planet. Physics, weapon mechanics, and game logic are ported 1:1 from the original x86 Assembly source (v1.50).
+Two ships battle in space near a gravitational planet with authentic physics, weapon mechanics, and energy management.
 
 
 ---

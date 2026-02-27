@@ -1,10 +1,8 @@
 """main.py — game loop and top-level orchestration.
 
-Mirrors MAIN.ASM.
-
 The game loop runs at TARGET_FPS=73 Hz (matching the original DOS interrupt rate).
 
-Loop order (mirrors Play_Interrupt + main loop in MAIN.ASM):
+Loop order:
   1. Clock tick
   2. Process pygame events (quit, etc.)
   3. Update key state
@@ -94,7 +92,6 @@ def handle_death(dead_idx: int, state: GameState) -> None:
     Does NOT reset objects or change mode; the game loop continues running so
     the particle explosion plays out. The loop detects EFLG_INACTIVE and resets.
 
-    Mirrors the death-handling section of MAIN.ASM.
     """
     if dead_idx == ENT_OBJ:
         state.klingon_score += 1
@@ -124,7 +121,7 @@ def _parse_args() -> argparse.Namespace:
     Returns a Namespace with attribute ``scale: int`` (default 1).
     """
     parser = argparse.ArgumentParser(
-        description='SpaceWar v1.72 (1985 B. Seiler) — Python/Pygame recreation'
+        description='SpaceWar — Python/Pygame recreation of the classic 1985 DOS space combat game'
     )
     parser.add_argument(
         '--scale', type=int, default=1, metavar='N',
@@ -181,7 +178,7 @@ def main() -> None:
     # RESIZABLE lets the user drag-resize; aspect ratio is maintained via
     # letterboxing in the scaling blit at the bottom of the loop.
     screen = pygame.display.set_mode((win_w, win_h), pygame.RESIZABLE)
-    pygame.display.set_caption('SPACEWAR  v1.72  (1985 B. SEILER)')
+    pygame.display.set_caption('SPACEWAR  1985')
     clock = pygame.time.Clock()
 
     # Intermediate 640×480 render target.  ALL rendering functions write here.

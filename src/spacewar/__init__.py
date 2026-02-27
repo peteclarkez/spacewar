@@ -1,1 +1,1 @@
-"""SpaceWar — faithful recreation of Bill Seiler's SpaceWar v1.72 (1985)."""
+"""SpaceWar — Python/Pygame recreation of the classic 1985 DOS space combat game."""

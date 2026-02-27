@@ -1,7 +1,5 @@
 """draw.py — all rendering logic.
 
-Mirrors DRAW.ASM + SPSET.ASM.
-
 Coordinate system
 -----------------
 All game logic uses *virtual* coordinates: x ∈ [0, VIRTUAL_W), y ∈ [0, VIRTUAL_H).
@@ -103,7 +101,7 @@ def put_pixel(surface: pygame.Surface, vx: int, vy: int, color: tuple) -> None:
 # ---------------------------------------------------------------------------
 # Sprite renderer
 # ---------------------------------------------------------------------------
-# All sprites from PICT16.ASM were designed for CGA square pixels.
+# Sprites were designed for CGA square pixels.
 # We render them at 1:1 screen pixels, centred at screen (vx, vy*Y_SCALE).
 # This gives correct proportions regardless of the virtual Y-scale factor.
 
@@ -302,7 +300,7 @@ def draw_planet(surface: pygame.Surface, state: GameState, attract: bool = False
 # ---------------------------------------------------------------------------
 
 def draw_enterprise(surface: pygame.Surface, state: GameState) -> None:
-    """Draw Enterprise ship (16×16 sprite from PICT16.ASM)."""
+    """Draw Enterprise ship (16×16 sprite)."""
     ship = state.objects[ENT_OBJ]
     if ship.eflg == EFLG_INACTIVE:
         return
@@ -324,7 +322,7 @@ def draw_enterprise(surface: pygame.Surface, state: GameState) -> None:
 
 
 def draw_klingon(surface: pygame.Surface, state: GameState) -> None:
-    """Draw Klingon ship (16×16 sprite from PICT16.ASM)."""
+    """Draw Klingon ship (16×16 sprite)."""
     ship = state.objects[KLN_OBJ]
     if ship.eflg == EFLG_INACTIVE:
         return
@@ -346,7 +344,7 @@ def draw_klingon(surface: pygame.Surface, state: GameState) -> None:
 
 
 def draw_torpedoes(surface: pygame.Surface, state: GameState) -> None:
-    """Draw all active torpedoes using angle-specific sprites from PICT16.ASM."""
+    """Draw all active torpedoes."""
     for i in range(ENT_TORP_START, ENT_TORP_END):
         obj = state.objects[i]
         if obj.eflg == EFLG_ACTIVE:
@@ -450,10 +448,7 @@ def draw_hyper_particles(surface: pygame.Surface, state: GameState) -> None:
 # ---------------------------------------------------------------------------
 
 def draw_energy_bars(surface: pygame.Surface, state: GameState) -> None:
-    """Draw S and E energy bars for both ships at the bottom of the screen.
-
-    Mirrors the HUD rendering section of DRAW.ASM.
-    """
+    """Draw S and E energy bars for both ships at the bottom of the screen."""
     bar_y = SCREEN_H - 24   # base y position (screen coords)
     bar_h = 8               # bar height in screen pixels
 
@@ -511,10 +506,7 @@ _FKEY_LABELS = [
 
 
 def draw_function_keys(surface: pygame.Surface, state: GameState) -> None:
-    """Draw F1–F8 footer bar, highlighting active toggles.
-
-    Mirrors the F-key footer in DRAW.ASM.
-    """
+    """Draw F1–F8 footer bar, highlighting active toggles."""
     font = pygame.font.SysFont('monospace', 11)
     footer_y = SCREEN_H - 48
     cell_w = SCREEN_W // 8

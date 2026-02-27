@@ -1,24 +1,19 @@
 """attract.py — attract mode (title screen sequence).
 
-Mirrors ATTRACT.ASM.
-
-The original cycles through four screens:
-  0 — Animated SPACEWAR title + copyright + scores
+Cycles through four screens:
+  0 — Animated SPACEWAR title + scores
   1 — Game instructions
   2 — Key layout grid (3×3 box grid per player)
-  3 — "User supported" message
+  3 — About message
 
 Title animation
 ---------------
 90 tile pieces scatter outward with random velocities then contract back to
-spell SPACEWAR.  Mirrors placing_title / first_movement / move_title in
-ATTRACT.ASM.  Tile bitmaps are transcribed from SPSET8.ASM (character
-indices 0x0E–0x12).
+spell SPACEWAR.
 
 Key grid
 --------
-Two 3×3 bordered-box grids, one per player, mirroring the key_instructions
-proc in ATTRACT.ASM which uses box-drawing tile characters to build the grid.
+Two 3×3 bordered-box grids, one per player.
 
 Public API
 ----------
@@ -52,7 +47,7 @@ _GREEN  = (0,   200, 0)
 _YELLOW = (200, 200, 0)
 
 # ---------------------------------------------------------------------------
-# Title animation constants  (ATTRACT.ASM / GENERAL.EQU, CGA mode)
+# Title animation constants
 # ---------------------------------------------------------------------------
 _TW = 16    # TITLE_WIDTH  — tile width in virtual pixels (same Hercules + CGA)
 _TH = 8     # TITLE_HEIGTH — tile height in virtual pixels (CGA value)
@@ -72,8 +67,7 @@ _SCATTER_TICKS = 45   # TITLE_MOVE_COUNT — steps per scatter / return pass
 _HOLD_TICKS    = 135  # frames to display assembled title before scattering
 
 # ---------------------------------------------------------------------------
-# Tile bitmaps  (SPSET8.ASM, types 0x0E–0x12)
-# Each entry is 8 × 16-bit row values; MSB of each word = leftmost pixel.
+# Tile bitmaps — 8 × 16-bit row values; MSB of each word = leftmost pixel.
 # ---------------------------------------------------------------------------
 _TILE_ROWS: dict[int, list[int]] = {
     0x0E: [0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
@@ -112,7 +106,6 @@ def _get_tile_surface(tile_type: int) -> pygame.Surface:
 
 # ---------------------------------------------------------------------------
 # Title piece table — (type, target_x, target_y) in virtual coordinates.
-# Transcribed from ATTRACT.ASM TITLE_TYPE + TITLE_X + TITLE_Y (CGA values).
 #
 # Letter offsets (TX = column index × _TW):
 #   S at TBX+0=4, P at +4=8, A at +8=12, C at +12=16, E at +16=20,
@@ -186,8 +179,7 @@ _TOTAL_PIECES: int = len(_TITLE_PIECES)   # 90
 class TitleAnimation:
     """Per-piece state for the SPACEWAR letter-block particle animation.
 
-    Mirrors the TITLE_X_DIS / TITLE_Y_DIS / TITLE_X_VEL / TITLE_Y_VEL arrays
-    from ATTRACT.ASM.  Initial state is fully assembled (HOLD phase).
+    Initial state is fully assembled (HOLD phase).
     """
     phase:      int = _PHASE_HOLD
     phase_tick: int = 0
@@ -204,13 +196,12 @@ class TitleAnimation:
 def _tick_title_anim(anim: TitleAnimation) -> None:
     """Advance the title particle animation by one game tick.
 
-    Phase machine mirrors first_movement / move_title in ATTRACT.ASM:
+    Phase machine:
       HOLD (assembled) → SCATTER (outward, 30 steps)
                        → ASSEMBLE (return, 30 steps)
                        → HOLD → …
 
-    Scatter velocity ≈ ±4 virtual px/tick  (matches ASM's signed-16-bit
-    random * 8 / 65536 ≈ ±4 px/step for a full-range random value).
+    Scatter velocity ≈ ±4 virtual px/tick.
     """
     if anim.phase == _PHASE_HOLD:
         anim.phase_tick += 1
@@ -271,7 +262,6 @@ def run_attract_tick(
     """Advance attract mode by one tick.
 
     Returns new game mode (MODE_ATTRACT or MODE_PLAY).
-    Mirrors attract-mode sequencing in ATTRACT.ASM.
     """
     # Advance blink + planet animation (run_physics_tick not called here).
     state.blink = (state.blink + 1) & 0xFF
@@ -310,10 +300,7 @@ def draw_attract_screen(
     state,
     attract: AttractState,
 ) -> None:
-    """Render the current attract screen.
-
-    Mirrors the screen-drawing sections of ATTRACT.ASM.
-    """
+    """Render the current attract screen."""
     surface.fill(_BLACK)
 
     idx = attract.screen_index
@@ -356,14 +343,10 @@ def _draw_title_screen(
     state,
     attract: AttractState,
 ) -> None:
-    """Attract screen 0: animated title, copyright, scores.
-
-    Mirrors display_copyright + placing_title / move_title in ATTRACT.ASM.
-    """
+    """Attract screen 0: animated title and scores."""
     _draw_title_anim(surface, attract.title_anim)
 
-    _centred(surface, 'V1.72',                          260, _DIM, 16)
-    _centred(surface, 'COPYRIGHT \u00a9 1985  B SEILER', 282, _DIM, 16)
+    _centred(surface, '\u00a9 1985  SPACEWAR', 282, _DIM, 16)
 
     ent_score = getattr(state, 'enterprise_score', 0)
     kln_score = getattr(state, 'klingon_score',    0)
@@ -389,10 +372,7 @@ def _draw_title_anim(surface: pygame.Surface, anim: TitleAnimation) -> None:
 # Screen 1 — game instructions
 # ---------------------------------------------------------------------------
 def _draw_instructions(surface: pygame.Surface) -> None:
-    """Attract screen 1: game instructions.
-
-    Mirrors game_instructions in ATTRACT.ASM (text reproduced verbatim).
-    """
+    """Attract screen 1: game instructions."""
     _centred(surface, 'G A M E    I N S T R U C T I O N S', 16, _WHITE, 20)
     pygame.draw.line(surface, _DIM, (40, 44), (SCREEN_W - 40, 44), 1)
 
@@ -485,7 +465,6 @@ def _draw_key_cell(
 ) -> None:
     """Draw one bordered key-button cell at screen position (x, y).
 
-    Mirrors the double-line box-drawing tiles (0x14–0x1E) from SPSET8.ASM.
     The double-line effect is approximated with two concentric white rectangles.
     """
     rect = pygame.Rect(x, y, _CELL_W, _CELL_H)
@@ -510,9 +489,8 @@ def _draw_key_cell(
 def _draw_key_grid(surface: pygame.Surface, state) -> None:
     """Attract screen 2: key-binding grid.
 
-    Mirrors key_instructions in ATTRACT.ASM.  Two 3×3 grids of bordered cells
-    (left player QWEASDZXC, right player keypad 789456123 or UIO/JKL/M,. with
-    --altkeys) with ship-icon decorations above each grid header.
+    Two 3×3 grids of bordered cells (left player QWEASDZXC, right player
+    keypad 789456123 or UIO/JKL/M,. with --altkeys) with ship-icon decorations.
     """
     from .pictures import get_enterprise_sprite, get_klingon_sprite
 
@@ -574,29 +552,20 @@ def _blit_ship(
 # Screen 3 — user-supported message
 # ---------------------------------------------------------------------------
 def _draw_user_supported(surface: pygame.Surface) -> None:
-    """Attract screen 3: user-supported message.
-
-    Mirrors user_supported in ATTRACT.ASM (text reproduced verbatim).
-    """
+    """Attract screen 3: about screen."""
     _centred(surface, 'SPACEWAR', 55, _WHITE, 44)
 
     lines = [
-        'SPACEWAR is distributed under the USER-SUPPORTED',
-        'concept.  You are encouraged to copy and share this',
-        'program with other users.  If you enjoy SPACEWAR, and want me',
-        "to finish SPACE MINEZ your contribution ($20 suggested) will",
-        'be appreciated.  For a $30 contribution you will receive the',
-        'source code for latest version of SPACEWAR.',
+        'SPACEWAR is a Python/Pygame recreation of the classic',
+        '1985 DOS space combat game.',
         '',
-        'USER-SUPPORTED software is based on these three beliefs:',
-        ' 1.  The value of software is best assessed by the',
-        '     user on his own system.',
-        ' 2.  Creation of personal computer software can and',
-        '     should be supported by computing community.',
-        ' 3.  That copying of programs should be encouraged,',
-        '     rather than restricted.',
+        'Two ships battle near a gravitational planet using',
+        'phasers, photon torpedoes, shields, and hyperspace.',
         '',
-        'Bill Seiler == 317 Lockewood Lane == Scotts Valley, CA. 95066',
+        'Controls: see key-layout screen (F-keys cycle screens).',
+        '',
+        'Source code available at:',
+        'github.com/your-repo/spacewar',
     ]
 
     y = 145
@@ -614,6 +583,6 @@ def _draw_user_supported(surface: pygame.Surface) -> None:
 # Attract planet (top-right corner, all screens)
 # ---------------------------------------------------------------------------
 def _draw_attract_planet(surface: pygame.Surface, state) -> None:
-    """Draw animated planet in top-right corner (mirrors ATTRACT.ASM interrupt)."""
+    """Draw animated planet in top-right corner."""
     from .draw import draw_planet
     draw_planet(surface, state, attract=True)

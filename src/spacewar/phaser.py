@@ -1,9 +1,7 @@
 """phaser.py — phaser beam firing, hit detection, and erase.
 
-Mirrors PHASER.ASM.
-
 The phaser beam is a ray cast in the ship's current facing direction.
-Key parameters (from PHASER.EQU):
+Key parameters:
   PHASER_RANGE   = 96  px  — maximum ray length
   Dead zone      = first 9 pixels — no hit-check
   Hit interval   = every 8 pixels (PHASER_TO_OBJ_RANGE)
@@ -71,8 +69,6 @@ def _draw_phaser_ray(
     Returns:
         Number of pixels stepped (used to save phaser_count for erase pass).
 
-    Mirrors the Phaser_Ray inner loop in PHASER.ASM:
-    - Uses CMPS_FLAG for hit-detect vs erase mode
     - Steps in cos/sin direction
     - Skip dead zone (first 9 pixels)
     - Every 8 pixels: Manhattan-distance hit check against all active objects
@@ -155,7 +151,7 @@ def _draw_phaser_ray(
 # ---------------------------------------------------------------------------
 
 def fire_phaser_enterprise(state: GameState, surface: pygame.Surface) -> None:
-    """Fire Enterprise phaser beam.  Mirrors Phaser_Ent in PHASER.ASM."""
+    """Fire Enterprise phaser beam."""
     ship = state.objects[ENT_OBJ]
     if ship.phaser_state != PHASER_IDLE:
         return
@@ -177,7 +173,7 @@ def fire_phaser_enterprise(state: GameState, surface: pygame.Surface) -> None:
 
 
 def erase_phaser_enterprise(state: GameState, surface: pygame.Surface) -> None:
-    """Erase Enterprise phaser beam (replay ray in black).  Mirrors Erase_Phaser."""
+    """Erase Enterprise phaser beam (replay ray in black)."""
     _draw_phaser_ray(state, surface, ENT_OBJ, compare=False)
 
 
@@ -186,7 +182,7 @@ def erase_phaser_enterprise(state: GameState, surface: pygame.Surface) -> None:
 # ---------------------------------------------------------------------------
 
 def fire_phaser_klingon(state: GameState, surface: pygame.Surface) -> None:
-    """Fire Klingon phaser beam.  Mirrors Phaser_Kln in PHASER.ASM."""
+    """Fire Klingon phaser beam."""
     ship = state.objects[KLN_OBJ]
     if ship.phaser_state != PHASER_IDLE:
         return
@@ -207,7 +203,7 @@ def fire_phaser_klingon(state: GameState, surface: pygame.Surface) -> None:
 
 
 def erase_phaser_klingon(state: GameState, surface: pygame.Surface) -> None:
-    """Erase Klingon phaser beam (replay ray in black).  Mirrors Erase_Phaser."""
+    """Erase Klingon phaser beam (replay ray in black)."""
     _draw_phaser_ray(state, surface, KLN_OBJ, compare=False)
 
 
