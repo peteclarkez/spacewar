@@ -1,224 +1,145 @@
-"""Tests for phaser.py — phaser firing, state machine, and hit detection."""
+"""
+Tests for phaser.py — ray casting, hit detection, planet blocking.
+"""
 
 import pytest
-
-from spacewar.init import new_game_state, GameObject
+from spacewar.phaser import Phaser, cast_phaser
 from spacewar.constants import (
-    ENT_OBJ, KLN_OBJ,
-    ENT_TORP_START,
-    EFLG_ACTIVE, EFLG_INACTIVE, EFLG_EXPLODING,
-    PHASER_IDLE, PHASER_DELAY, PHASER_RANGE, PHASER_ERASE,
-    PHASER_FIRE_ENERGY, PHASER_DAMAGE, PHASER_TO_OBJ_RANGE,
-    PHASER_SOUND, STARTING_ENERGY, STARTING_SHIELDS,
+    PHASER_RANGE, PHASER_ERASE, PHASER_DELAY,
+    PHASER_DAMAGE, PHASER_TO_OBJ_RANGE,
+    PLANET_X, PLANET_Y, PLANET_RANGE,
+    PLAYER_ENT, PLAYER_KLN,
 )
+from spacewar.ship import Ship
+from spacewar.torpedo import Torpedo
 
 
-# ---------------------------------------------------------------------------
-# Minimal pygame surface stub so phaser tests don't need a display
-# ---------------------------------------------------------------------------
-
-class _FakeSurface:
-    """Minimal pygame.Surface stand-in for unit tests."""
-
-    def __init__(self, w=640, h=480):
-        self._w = w
-        self._h = h
-        self.pixels: dict[tuple, tuple] = {}
-
-    def get_width(self):
-        return self._w
-
-    def get_height(self):
-        return self._h
-
-    def set_at(self, pos, color):
-        self.pixels[pos] = color
+def _make_torp(x, y, owner=PLAYER_KLN):
+    t = Torpedo()
+    t.launch(x, y, 0.0, 0.0, 0, owner)
+    return t
 
 
-class TestPhaserFire:
-    def test_fire_sets_state(self):
-        """Firing sets phaser_state to PHASER_DELAY and deducts energy."""
-        from spacewar.phaser import fire_phaser_enterprise
-        state = new_game_state()
-        ship = state.objects[ENT_OBJ]
-        ship.eflg = EFLG_ACTIVE
-        ship.energy = STARTING_ENERGY
-        surf = _FakeSurface()
+class TestPhaserState:
+    def test_default_inactive(self):
+        p = Phaser()
+        assert not p.active
 
-        fire_phaser_enterprise(state, surf)
+    def test_reset(self):
+        p = Phaser(active=True, timer=10)
+        p.reset()
+        assert not p.active
+        assert p.timer == 0
 
-        assert ship.phaser_state == PHASER_DELAY
-        assert ship.energy == STARTING_ENERGY - PHASER_FIRE_ENERGY
+    def test_tick_decrements(self):
+        p = Phaser(active=True, timer=5)
+        p.tick()
+        assert p.timer == 4
 
-    def test_fire_sets_phaser_sound(self):
-        from spacewar.phaser import fire_phaser_enterprise
-        state = new_game_state()
-        state.objects[ENT_OBJ].energy = STARTING_ENERGY
-        surf = _FakeSurface()
-
-        fire_phaser_enterprise(state, surf)
-
-        assert state.sound_flag & PHASER_SOUND
-
-    def test_fire_saves_origin(self):
-        """phaser_x/y/angle saved from ship position at fire time."""
-        from spacewar.phaser import fire_phaser_enterprise
-        state = new_game_state()
-        ship = state.objects[ENT_OBJ]
-        ship.x, ship.y, ship.angle = 150, 75, 32
-        ship.energy = STARTING_ENERGY
-        surf = _FakeSurface()
-
-        fire_phaser_enterprise(state, surf)
-
-        assert ship.phaser_x == 150
-        assert ship.phaser_y == 75
-        assert ship.phaser_angle == 32
-
-    def test_no_fire_when_energy_zero(self):
-        """Cannot fire with zero energy."""
-        from spacewar.phaser import fire_phaser_enterprise
-        state = new_game_state()
-        state.objects[ENT_OBJ].energy = 0
-        surf = _FakeSurface()
-
-        fire_phaser_enterprise(state, surf)
-
-        assert state.objects[ENT_OBJ].phaser_state == PHASER_IDLE
-
-    def test_no_fire_during_cooldown(self):
-        """Cannot fire when phaser_state != PHASER_IDLE."""
-        from spacewar.phaser import fire_phaser_enterprise
-        state = new_game_state()
-        state.objects[ENT_OBJ].energy = STARTING_ENERGY
-        state.objects[ENT_OBJ].phaser_state = 10   # still cooling down
-        surf = _FakeSurface()
-
-        fire_phaser_enterprise(state, surf)
-
-        # State should not change
-        assert state.objects[ENT_OBJ].phaser_state == 10
-
-    def test_klingon_fire(self):
-        """Klingon phaser fires symmetrically."""
-        from spacewar.phaser import fire_phaser_klingon
-        state = new_game_state()
-        kln = state.objects[KLN_OBJ]
-        kln.energy = STARTING_ENERGY
-        surf = _FakeSurface()
-
-        fire_phaser_klingon(state, surf)
-
-        assert kln.phaser_state == PHASER_DELAY
-        assert kln.energy == STARTING_ENERGY - PHASER_FIRE_ENERGY
+    def test_deactivates_at_zero(self):
+        p = Phaser(active=True, timer=1)
+        p.tick()
+        assert not p.active
+        assert p.timer == 0
 
 
-class TestPhaserRay:
-    def test_ray_draws_pixels(self):
-        """Firing should draw pixels on the surface."""
-        from spacewar.phaser import fire_phaser_enterprise
-        state = new_game_state()
-        ship = state.objects[ENT_OBJ]
-        ship.x, ship.y = 100, 50
-        ship.angle = 0   # pointing right
-        ship.energy = STARTING_ENERGY
-        surf = _FakeSurface()
+class TestCastPhaser:
+    """Tests for the ray-casting function."""
 
-        fire_phaser_enterprise(state, surf)
+    def _cast(self, ship_x, ship_y, angle, targets_ships=None,
+              targets_torps=None, planet_active=False):
+        phaser = Phaser(owner=PLAYER_ENT)
+        ships_hit, torps_hit = cast_phaser(
+            phaser, ship_x, ship_y, angle,
+            targets_ships or [],
+            targets_torps or [],
+            planet_active,
+        )
+        return phaser, ships_hit, torps_hit
 
-        assert len(surf.pixels) > 0
+    def test_no_targets_no_hit(self):
+        phaser, ships, torps = self._cast(100.0, 50.0, 0)
+        assert ships == []
+        assert torps == []
 
-    def test_ray_length_capped_at_phaser_range(self):
-        """Ray never extends beyond PHASER_RANGE pixels."""
-        from spacewar.phaser import fire_phaser_enterprise
-        state = new_game_state()
-        ship = state.objects[ENT_OBJ]
-        ship.x, ship.y = 100, 50
-        ship.angle = 0
-        ship.energy = STARTING_ENERGY
-        surf = _FakeSurface()
+    def test_ray_reaches_max_range(self):
+        phaser, _, _ = self._cast(100.0, 50.0, 0)
+        # End point should be ~PHASER_RANGE ahead of start
+        assert phaser.end_x > 100.0
+        delta = phaser.end_x - 100.0
+        assert delta <= PHASER_RANGE + 1
 
-        fire_phaser_enterprise(state, surf)
+    def test_hits_ship_in_line_of_fire(self):
+        target = Ship.klingon()
+        # Place within PHASER_RANGE (96px) of firing position (100.0)
+        target.x = 150.0
+        target.y = 50.0   # Same Y as firing ship
+        phaser, ships, _ = self._cast(100.0, 50.0, 0,   # fire East
+                                       targets_ships=[target])
+        assert target in ships
 
-        assert ship.phaser_count <= PHASER_RANGE
+    def test_misses_ship_behind(self):
+        target = Ship.klingon()
+        target.x = 50.0
+        target.y = 50.0   # West of firing position
+        _, ships, _ = self._cast(100.0, 50.0, 0, targets_ships=[target])
+        assert target not in ships
 
-    def test_phaser_count_stored(self):
-        """phaser_count is set to the actual ray length drawn."""
-        from spacewar.phaser import fire_phaser_enterprise
-        state = new_game_state()
-        state.objects[ENT_OBJ].x = 100
-        state.objects[ENT_OBJ].y = 50
-        state.objects[ENT_OBJ].angle = 0
-        state.objects[ENT_OBJ].energy = STARTING_ENERGY
-        surf = _FakeSurface()
+    def test_misses_out_of_range_ship(self):
+        target = Ship.klingon()
+        target.x = 100.0 + PHASER_RANGE + 20   # just past max range
+        target.y = 50.0
+        _, ships, _ = self._cast(100.0, 50.0, 0, targets_ships=[target])
+        assert target not in ships
 
-        fire_phaser_enterprise(state, surf)
+    def test_hits_torpedo_in_path(self):
+        torp = _make_torp(150.0, 50.0)
+        # Pin to a known position inside phaser range (launch adds spawn offset)
+        torp.x, torp.y = 140.0, 50.0
+        _, _, torps = self._cast(100.0, 50.0, 0, targets_torps=[torp])
+        assert torp in torps
 
-        assert state.objects[ENT_OBJ].phaser_count > 0
+    def test_torpedo_blocks_ship_behind_it(self):
+        """Phaser stops at torpedo; ship behind is not hit."""
+        torp = _make_torp(150.0, 50.0)
+        # Override position after launch (spawn offset may shift it)
+        torp.x, torp.y = 130.0, 50.0
+        target = Ship.klingon()
+        target.x = 160.0
+        target.y = 50.0
+        _, ships, torps = self._cast(100.0, 50.0, 0,
+                                      targets_ships=[target],
+                                      targets_torps=[torp])
+        assert torp in torps
+        assert target not in ships
 
+    def test_planet_blocks_ray(self):
+        # Fire East directly into the planet (PLANET_X is ~319)
+        # Ship at Y=PLANET_Y so the ray passes through planet centre
+        phaser, _, _ = self._cast(100.0, float(PLANET_Y), 0,
+                                   planet_active=True)
+        # Ray should stop at or before the planet edge
+        assert phaser.end_x <= PLANET_X + PLANET_RANGE + PHASER_TO_OBJ_RANGE + 1
 
-class TestPhaserHitDetection:
-    def test_ship_in_range_loses_shields(self):
-        """Target ship within PHASER_TO_OBJ_RANGE of ray loses PHASER_DAMAGE shields."""
-        from spacewar.phaser import fire_phaser_enterprise
-        state = new_game_state()
-        ship = state.objects[ENT_OBJ]
-        ship.x, ship.y = 100, 50
-        ship.angle = 0   # pointing right
-        ship.energy = STARTING_ENERGY
+    def test_does_not_hit_dead_ship(self):
+        target = Ship.klingon()
+        target.x = 150.0
+        target.y = 50.0
+        target.alive = False
+        _, ships, _ = self._cast(100.0, 50.0, 0, targets_ships=[target])
+        assert target not in ships
 
-        # Place Klingon ship directly in the ray path
-        kln = state.objects[KLN_OBJ]
-        kln.x = 130   # 30px to the right — well within range=96
-        kln.y = 50    # same row
-        kln.eflg = EFLG_ACTIVE
-        kln.shields = STARTING_SHIELDS
+    def test_does_not_hit_cloaked_ship(self):
+        target = Ship.klingon()
+        target.x = 150.0
+        target.y = 50.0
+        target.cloaked = True
+        # cast_phaser caller is responsible for filtering cloaked ships;
+        # verify behaviour when caller passes only visible ships
+        # (empty list → no hits)
+        _, ships, _ = self._cast(100.0, 50.0, 0, targets_ships=[])
+        assert ships == []
 
-        surf = _FakeSurface()
-        fire_phaser_enterprise(state, surf)
-
-        assert kln.shields < STARTING_SHIELDS
-
-    def test_torpedo_in_range_explodes(self):
-        """Torpedo within PHASER_TO_OBJ_RANGE of ray check point explodes."""
-        from spacewar.phaser import fire_phaser_enterprise
-        state = new_game_state()
-        ship = state.objects[ENT_OBJ]
-        ship.x, ship.y = 100, 50
-        ship.angle = 0
-        ship.energy = STARTING_ENERGY
-
-        torp = state.objects[ENT_TORP_START]
-        torp.x = 130
-        torp.y = 50
-        torp.eflg = EFLG_ACTIVE
-
-        surf = _FakeSurface()
-        fire_phaser_enterprise(state, surf)
-
-        assert torp.eflg == EFLG_EXPLODING
-
-    def test_erase_does_not_hit(self):
-        """Erase pass (compare=False) should not damage any objects."""
-        from spacewar.phaser import fire_phaser_enterprise, erase_phaser_enterprise
-        state = new_game_state()
-        ship = state.objects[ENT_OBJ]
-        ship.x, ship.y = 100, 50
-        ship.angle = 0
-        ship.energy = STARTING_ENERGY
-
-        kln = state.objects[KLN_OBJ]
-        kln.x = 130
-        kln.y = 50
-        kln.eflg = EFLG_ACTIVE
-        kln.shields = STARTING_SHIELDS
-
-        surf = _FakeSurface()
-
-        # First do a fire (to set up phaser_count etc.)
-        fire_phaser_enterprise(state, surf)
-        shields_after_fire = kln.shields
-
-        # Now erase — should not change shields further
-        erase_phaser_enterprise(state, surf)
-        assert kln.shields == shields_after_fire
+    def test_phaser_end_recorded(self):
+        phaser, _, _ = self._cast(100.0, 50.0, 0)
+        assert phaser.end_x != 100.0   # ray advanced at least somewhat

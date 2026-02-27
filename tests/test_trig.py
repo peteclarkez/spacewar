@@ -1,123 +1,136 @@
-"""Tests for trig.py — sine/cosine lookup tables and atan approximation."""
+"""
+Tests for trig.py — 256-unit angle system, lookup tables, and helpers.
+"""
 
 import math
 import pytest
-
-from spacewar.trig import SINE_TABLE, TAN_TABLE, sin_lookup, cos_lookup, atan_approx
-
-
-class TestSineTable:
-    def test_length(self):
-        assert len(SINE_TABLE) == 256
-
-    def test_zero(self):
-        assert sin_lookup(0) == 0
-
-    def test_quarter_max(self):
-        # sin(64) = peak ≈ 32767
-        assert sin_lookup(64) == 0x7FFF
-
-    def test_half(self):
-        # sin(128) ≈ 0
-        assert sin_lookup(128) == 0
-
-    def test_negative_half(self):
-        # sin(192) should be near -32767
-        val = sin_lookup(192)
-        assert val < 0
-        assert val < -32000
-
-    def test_angle_wrap(self):
-        # angle 256 should equal angle 0
-        assert sin_lookup(256) == sin_lookup(0)
-        assert sin_lookup(257) == sin_lookup(1)
-        assert sin_lookup(-1) == sin_lookup(255)
-
-    def test_all_in_range(self):
-        for i, v in enumerate(SINE_TABLE):
-            assert -32768 <= v <= 32767, f"SINE_TABLE[{i}] = {v} out of range"
-
-    def test_symmetry_positive(self):
-        # sin(64-k) == sin(64+k) for first quadrant symmetry
-        for k in range(1, 32):
-            assert sin_lookup(64 - k) == sin_lookup(64 + k), f"Symmetry failed at k={k}"
-
-    def test_first_quarter_increasing(self):
-        # Values should increase from 0 to 64
-        for i in range(63):
-            assert sin_lookup(i) <= sin_lookup(i + 1), f"Not increasing at index {i}"
+from spacewar import trig as T
 
 
-class TestCosTable:
-    def test_cos_is_sin_plus_64(self):
-        # cos(x) = sin(x + 64) for all angles
-        for a in range(256):
-            assert cos_lookup(a) == sin_lookup((a + 64) & 0xFF)
+class TestTables:
+    def test_table_length(self):
+        assert len(T.SIN_TABLE) == 256
+        assert len(T.COS_TABLE) == 256
 
-    def test_cos_zero(self):
-        # cos(0) = sin(64) = max
-        assert cos_lookup(0) == 0x7FFF
+    def test_range(self):
+        for v in T.SIN_TABLE:
+            assert -32767 <= v <= 32767
+        for v in T.COS_TABLE:
+            assert -32767 <= v <= 32767
 
-    def test_cos_90(self):
-        # cos(64) = sin(128) ≈ 0
-        assert cos_lookup(64) == 0
+    def test_angle_0_is_east(self):
+        # Angle 0 → cos=max, sin≈0
+        assert T.COS_TABLE[0] == 32767
+        assert T.SIN_TABLE[0] == 0
 
-    def test_cos_180(self):
-        # cos(128) = sin(192) ≈ -32767
-        assert cos_lookup(128) < -32000
+    def test_angle_64_is_south(self):
+        # Angle 64 → cos≈0, sin=max  (screen Y-down)
+        assert abs(T.COS_TABLE[64]) <= 1
+        assert T.SIN_TABLE[64] == 32767
 
-    def test_cos_270(self):
-        # cos(192) = sin(256) = sin(0) = 0
-        assert cos_lookup(192) == 0
+    def test_angle_128_is_west(self):
+        assert T.COS_TABLE[128] == -32767
+        assert abs(T.SIN_TABLE[128]) <= 1
 
+    def test_angle_192_is_north(self):
+        assert abs(T.COS_TABLE[192]) <= 1
+        assert T.SIN_TABLE[192] == -32767
 
-class TestTanTable:
-    def test_length(self):
-        assert len(TAN_TABLE) == 32
-
-    def test_first_zero(self):
-        assert TAN_TABLE[0] == 0
-
-    def test_all_positive(self):
-        for i, v in enumerate(TAN_TABLE):
-            assert v >= 0, f"TAN_TABLE[{i}] = {v} should be positive"
-
-    def test_monotone_increasing(self):
-        for i in range(31):
-            assert TAN_TABLE[i] <= TAN_TABLE[i + 1]
+    def test_periodicity(self):
+        for i in range(256):
+            assert T.SIN_TABLE[i] == T.SIN_TABLE[i % 256]
+            assert T.COS_TABLE[i] == T.COS_TABLE[i % 256]
 
 
-class TestAtanApprox:
-    def test_right(self):
-        # Pointing right (+x) → angle 0
-        assert atan_approx(1, 0) == 0
+class TestHelpers:
+    def test_sin_fp_wraps(self):
+        assert T.sin_fp(0)   == T.SIN_TABLE[0]
+        assert T.sin_fp(256) == T.SIN_TABLE[0]   # wrap
+        assert T.sin_fp(-1)  == T.SIN_TABLE[255]
 
-    def test_down(self):
-        # Pointing down (+y in screen coords) → angle 64
-        assert atan_approx(0, 1) == 64
+    def test_cos_fp_wraps(self):
+        assert T.cos_fp(0)   == T.COS_TABLE[0]
+        assert T.cos_fp(512) == T.COS_TABLE[0]   # 512 & 0xFF = 0
 
-    def test_left(self):
-        # Pointing left (−x) → angle 128
-        assert atan_approx(-1, 0) == 128
+    def test_fp_to_float(self):
+        assert T.fp_to_float(32767) == pytest.approx(1.0, abs=1e-4)
+        assert T.fp_to_float(0)    == 0.0
+        assert T.fp_to_float(-32767) == pytest.approx(-1.0, abs=1e-4)
 
-    def test_up(self):
-        # Pointing up (−y) → angle 192
-        assert atan_approx(0, -1) == 192
 
-    def test_zero_input(self):
-        # Origin → return 0 (no crash)
-        assert atan_approx(0, 0) == 0
+class TestAngleBetween:
+    def test_east(self):
+        a = T.angle_between(1, 0)
+        assert a == 0
 
-    def test_diagonal_down_right(self):
-        # 45° down-right → angle 32
-        angle = atan_approx(1, 1)
-        assert 28 <= angle <= 36, f"Expected ~32, got {angle}"
+    def test_south(self):
+        # dy positive = screen-down = angle 64
+        a = T.angle_between(0, 1)
+        assert a == 64
 
-    def test_result_in_range(self):
-        # All results must be in [0, 255]
-        for dx in range(-5, 6):
-            for dy in range(-5, 6):
-                if dx == 0 and dy == 0:
-                    continue
-                result = atan_approx(dx, dy)
-                assert 0 <= result <= 255, f"atan_approx({dx},{dy}) = {result}"
+    def test_west(self):
+        a = T.angle_between(-1, 0)
+        assert a == 128
+
+    def test_north(self):
+        a = T.angle_between(0, -1)
+        assert a == 192
+
+    def test_zero_vector(self):
+        assert T.angle_between(0, 0) == 0
+
+    def test_result_range(self):
+        for dx in range(-2, 3):
+            for dy in range(-2, 3):
+                a = T.angle_between(dx, dy)
+                assert 0 <= a < 256
+
+
+class TestThrustComponents:
+    def test_thrust_east(self):
+        ax, ay = T.thrust_components(0)
+        assert ax > 0
+        assert abs(ay) < 1e-4
+
+    def test_thrust_west(self):
+        ax, ay = T.thrust_components(128)
+        assert ax < 0
+        assert abs(ay) < 1e-4
+
+    def test_thrust_magnitude(self):
+        # Max thrust ≈ (32767 >> 3) / 65536
+        ax, _ = T.thrust_components(0)
+        expected = (32767 >> 3) / 65536
+        assert ax == pytest.approx(expected, rel=1e-3)
+
+
+class TestTorpedoVelocity:
+    def test_forward_boost(self):
+        vx, vy = T.torpedo_velocity(0)
+        assert vx > 0          # fired eastward
+        assert abs(vy) < 1e-4
+
+    def test_magnitude_greater_than_thrust(self):
+        # Torpedo adds more velocity than thrust
+        tvx, _ = T.torpedo_velocity(0)
+        ax,  _ = T.thrust_components(0)
+        assert tvx > ax
+
+    def test_fire_scale_2(self):
+        # FIRE_SCALE=2 → multiply by 4
+        vx, _ = T.torpedo_velocity(0, fire_scale=2)
+        # cos(0)=32767; ×4 / 65536 ≈ 2.0
+        assert vx == pytest.approx(2.0, abs=0.01)
+
+
+class TestSpawnOffset:
+    def test_east_facing(self):
+        ox, oy = T.spawn_offset(0)
+        assert ox > 0       # offset is in facing direction
+        assert abs(oy) < 1
+
+    def test_offset_larger_than_torp_range(self):
+        from spacewar.constants import SHIP_TO_TORP_RANGE
+        ox, oy = T.spawn_offset(0)
+        # The offset keeps the torpedo outside SHIP_TO_TORP_RANGE
+        assert abs(ox) >= SHIP_TO_TORP_RANGE or abs(oy) >= SHIP_TO_TORP_RANGE

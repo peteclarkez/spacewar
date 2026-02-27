@@ -1,171 +1,127 @@
-"""constants.py — all named game constants.
+"""
+All verified numeric constants for the SpaceWar 1985 faithful recreation.
+Values derived from the original DOS/CGA assembly source and game manual.
 """
 
-# ---------------------------------------------------------------------------
-# Display / virtual coordinate space
-# ---------------------------------------------------------------------------
-VIRTUAL_W: int = 640          # MAX_X_AXIS — virtual pixels wide
-VIRTUAL_H: int = 200          # MAX_Y_AXIS — virtual pixels tall
-SCREEN_W: int = 640           # Physical window width
-SCREEN_H: int = 480           # Physical window height (Y doubled)
-Y_SCALE: int = 2              # Each virtual row → 2 screen rows
-# Canonical game surface dimensions (the intermediate render target).
-# All draw/phaser/attract code bounds-checks against these values, which is
-# correct because game_surface is always exactly GAME_W × GAME_H.
-GAME_W: int = SCREEN_W        # 640
-GAME_H: int = SCREEN_H        # 480
+# ── Display ──────────────────────────────────────────────────────────────────
+VIRTUAL_W = 640          # CGA native width (virtual game coord space)
+VIRTUAL_H = 200          # CGA native height (virtual game coord space)
+DISPLAY_W = 640          # Rendered canvas width
+DISPLAY_H = 480          # Rendered canvas height (VIRTUAL_H × Y_SCALE)
+Y_SCALE   = 2            # Every virtual Y unit is 2 screen pixels tall
+TARGET_FPS = 73          # ~72.8 Hz (1,193,180 / 16390 system interrupts/s)
 
-# ---------------------------------------------------------------------------
-# Physics
-# ---------------------------------------------------------------------------
-WRAP_FACTOR: int = 8          # Margin at screen edges before wrap
-MAX_X_VEL: int = 8            # MAX_X_VELOCITY — clamp threshold
-MAX_Y_VEL: int = 8            # MAX_Y_VELOCITY
-ACCEL_SCALE: int = 3          # Thrust acceleration SAR (÷8)
-FIRE_SCALE: int = 2           # Torpedo launch speed SAR (÷4) from cos/sin max
-ROTATE_RATE: int = 2          # Degrees (in 0-255 space) per tick
+# ── Screen wrapping ───────────────────────────────────────────────────────────
+WRAP_FACTOR = 8          # Objects re-appear WRAP_FACTOR px in from opposite edge
 
-# Timing intervals — all powers of 2, gated on BLINK counter
-IMPULSE_TIME: int = 32        # Ticks between thrust energy drains
-CLOAK_TIME: int = 32          # Ticks between cloak energy drains
-DILITHIUM_TIME: int = 256     # Ticks between energy recharge (+1 E)
-PHOTON_TIME: int = 16         # Ticks between torpedo energy drains
-PLANET_TIME: int = 16         # Ticks between planet animation frames
-WARNING_TIME: int = 32        # Ticks between shield warning sound toggling
-SWAP_TIME: int = 4            # Ticks between S↔E energy transfer pulses
+# ── Physics / fixed-point scaling ────────────────────────────────────────────
+FRAC          = 65536    # 16.16 fixed-point denominator
+MAX_VELOCITY  = 8        # Integer velocity cap per axis (px/tick)
+ACCEL_SCALE   = 3        # Thrust right-shift (divides trig value by 8)
+FIRE_SCALE    = 2        # Torpedo initial speed left-shift (×4 from ship velocity)
 
-TARGET_FPS: int = 73          # 1,193,180 / 16,390 ≈ 72.8 Hz
+# ── Starfield ─────────────────────────────────────────────────────────────────
+STAR_COUNT    = 512      # Static single-pixel stars (drawn in virtual space)
 
-# ---------------------------------------------------------------------------
-# Starting positions
-# ---------------------------------------------------------------------------
-# Enterprise starts at (MAX_X/4, (MAX_Y-16)/4)
-ENT_START_X: int = 160        # 640 / 4
-ENT_START_Y: int = 46         # (200 - 16) / 4
-ENT_START_ANGLE: int = 0      # pointing right
+# ── Planet ────────────────────────────────────────────────────────────────────
+PLANET_X      = 319      # Planet centre X in virtual coords (640//2 - 1)
+PLANET_Y      = 99       # Planet centre Y in virtual coords (200//2 - 1)
+PLANET_RANGE  = 16       # Collision radius (virtual pixels)
+PLANET_TIME   = 16       # Ticks between planet animation frames
+PLANET_FRAMES = 16       # Number of planet animation states
+# Rendered size in screen pixels: 48 wide (3:2 from 32-px source), 64 tall (32×Y_SCALE)
+PLANET_DRAW_W = 48
+PLANET_DRAW_H = 64
 
-# Klingon starts at (3*MAX_X/4, 3*(MAX_Y-16)/4)
-KLN_START_X: int = 480        # 3 * 640 / 4
-KLN_START_Y: int = 138        # 3 * (200 - 16) / 4
-KLN_START_ANGLE: int = 128    # pointing left (180°)
+# ── Rotation ──────────────────────────────────────────────────────────────────
+ANGLE_UNITS   = 256      # Full circle = 256 angle units
+ROTATE_RATE   = 2        # Angle units changed per tick while rotate key held
 
-# ---------------------------------------------------------------------------
-# Energy / shields
-# ---------------------------------------------------------------------------
-STARTING_SHIELDS: int = 31    # ZSHLDS — initial shield energy
-STARTING_ENERGY: int = 127    # ZENRGY — initial dilithium energy (max)
+# ── Ship starting state ───────────────────────────────────────────────────────
+ENT_START_X   = 160      # Enterprise spawn X (virtual)
+ENT_START_Y   = 46       # Enterprise spawn Y (virtual) — ~VIRTUAL_H/4
+ENT_START_A   = 0        # Enterprise start angle (facing East)
+KLN_START_X   = 480      # Klingon spawn X (virtual)
+KLN_START_Y   = 138      # Klingon spawn Y (virtual) — ~3*VIRTUAL_H/4
+KLN_START_A   = 128      # Klingon start angle (facing West)
 
-# ---------------------------------------------------------------------------
-# Planet
-# ---------------------------------------------------------------------------
-PLANET_X: int = 319           # (640/2) - 1
-PLANET_Y: int = 99            # (200/2) - 1
-ATTRACT_PLANET_X: int = 592   # MAX_X - 3*16 (top-right corner in attract)
-ATTRACT_PLANET_Y: int = 24    # top-right corner in attract
-PLANET_RANGE: int = 16        # Manhattan collision radius
-PLANET_SIZE: int = 16         # Sprite half-width (pixels)
+# ── Energy ────────────────────────────────────────────────────────────────────
+STARTING_SHIELDS  = 31   # Shield (S) energy per ship at game start
+STARTING_ENERGY   = 127  # General (E) / Dilithium energy per ship at start
+MAX_ENERGY        = 127  # Unsigned-byte ceiling: recharge stops here
+DILITHIUM_TIME    = 256  # Ticks between +1 E-energy recharge
+IMPULSE_TIME      = 32   # Ticks between 1 E-unit cost for thrust
+CLOAK_TIME        = 32   # Ticks between 1 E-unit cost for cloak
+SWAP_TIME         = 4    # Ticks between 1-unit S↔E transfer
+LOW_SHIELD_LIMIT  = 16   # Shield warning threshold
 
-# ---------------------------------------------------------------------------
-# Weapons — Phaser
-# ---------------------------------------------------------------------------
-PHASER_FIRE_ENERGY: int = 1   # Energy cost to fire
-PHASER_RANGE: int = 96        # Maximum ray length in virtual pixels
-PHASER_DELAY: int = 24        # Cooldown ticks after firing (PHST initial)
-PHASER_ERASE: int = 20        # Tick at which the ray is erased
-PHASER_TO_OBJ_RANGE: int = 8  # Manhattan hit-check interval along ray
-PHASER_DAMAGE: int = 2        # Shield damage per phaser hit
+# ── Energy costs ──────────────────────────────────────────────────────────────
+PHOTON_LAUNCH_ENERGY = 1   # E cost per torpedo fired
+PHASER_FIRE_ENERGY   = 1   # E cost per phaser shot
+HYPERSPACE_ENERGY    = 8   # E cost for hyperspace jump
 
-# Phaser state machine sentinel
-PHASER_IDLE: int = 255        # ZPHST — phaser not firing
+# ── Torpedoes ─────────────────────────────────────────────────────────────────
+MAX_TORPS          = 7    # Max simultaneous torpedoes per ship
+PHOTON_ENERGY      = 40   # Initial torpedo "fuel" (lifespan units)
+PHOTON_TIME        = 16   # Ticks between -1 torpedo energy drain
+PHOTON_DAMAGE      = 4    # Shield damage per torpedo hit
+SHIP_TO_TORP_RANGE = 8    # Ship-torpedo collision radius (virtual px)
+TORP_TO_TORP_RANGE = 6    # Torp-torp collision radius (virtual px)
+# Torpedo spawn offset from ship centre: cos/sin >> 11 (~15 px max)
+TORP_SPAWN_SHIFT   = 11
 
-# ---------------------------------------------------------------------------
-# Weapons — Torpedo
-# ---------------------------------------------------------------------------
-PHOTON_LAUNCH_ENERGY: int = 1 # Energy cost to launch one torpedo
-PHOTON_ENERGY: int = 40       # Energy given to torpedo at launch (ENRGY)
-PHOTON_DAMAGE: int = 4        # Shield damage per torpedo hit
-HYPERSPACE_ENERGY: int = 8    # Energy cost to jump
+# ── Phasers ───────────────────────────────────────────────────────────────────
+PHASER_RANGE        = 96   # Max phaser ray length (virtual pixels)
+PHASER_ERASE        = 20   # Tick at which phaser ray is erased
+PHASER_DELAY        = 24   # Full cooldown after firing (ticks)
+PHASER_TO_OBJ_RANGE = 8    # Phaser hit-check radius (must be power of 2)
+PHASER_DAMAGE       = 2    # Shield damage per phaser hit
+PHASER_SKIP         = 9    # Dead zone pixels skipped from ship (no self-hit)
 
-# ---------------------------------------------------------------------------
-# Collision ranges
-# ---------------------------------------------------------------------------
-SHIP_TO_SHIP_RANGE: int = 16  # Manhattan radius for ship-ship collision
-SHIP_TO_TORP_RANGE: int = 8   # Manhattan radius for ship-torpedo collision
-TORP_TO_TORP_RANGE: int = 6   # Manhattan radius for torp-torp collision
-BOUNCE_FACTOR: int = 2        # Pixels ships are pushed apart on ship-ship hit
-PLANET_DAMAGE: int = 2        # Shield damage from planet contact
+# ── Ship collisions ───────────────────────────────────────────────────────────
+SHIP_TO_SHIP_RANGE = 16   # Ship-ship collision radius (virtual px)
+BOUNCE_FACTOR      = 2    # Pixels pushed apart after ship-ship collision
+PLANET_DAMAGE      = 2    # Shield units drained per tick near planet
 
-# ---------------------------------------------------------------------------
-# Sound flags
-# ---------------------------------------------------------------------------
-WARNING_SOUND: int = 0x01
-PHASER_SOUND: int = 0x02
-PHOTON_SOUND: int = 0x04
-EXPLOSION_SOUND: int = 0x08
-HYPER_SOUND: int = 0x10
-TORP_HIT_SOUND: int = 0x20
-PHASER_SOUND_RAMP: int = 8    # Phaser pitch step counter max
-LOW_SHIELD_LIMIT: int = 16    # Below this → warning sound activates
+# ── Hyperspace / Death explosion ─────────────────────────────────────────────
+HYPER_DURATION       = 64   # Total ticks for hyperspace animation
+HYPER_PHASE          = 32   # Ticks per expand / contract phase
+HYPER_PARTICLES      = 32   # Particles per ship (hyperspace + death)
+SHIP_EXPLOSION_TICKS = 40   # ship.exps value set on death (~0.55 s at 73 fps)
 
-# ---------------------------------------------------------------------------
-# Robot AI probabilities
-# ---------------------------------------------------------------------------
-PROB_IMPULSE: int = 16        # 1/16 chance of thrust per tick
-PROB_PHOTON: int = 8          # 1/8 chance of firing per tick (Klingon)
-PROB_HYPER: int = 1024        # 1/1024 chance of hyperspace per tick
+# ── Audio ─────────────────────────────────────────────────────────────────────
+PHASER_SOUND_RAMP = 8      # Phaser pitch increase per tick
+WARNING_TIME      = 32     # Warning sound alternation period (ticks)
 
-# ---------------------------------------------------------------------------
-# Object table indices
-# ---------------------------------------------------------------------------
-ENT_OBJ: int = 0              # Enterprise ship
-KLN_OBJ: int = 8              # Klingon ship
-ENT_TORP_START: int = 1       # First Enterprise torpedo slot
-ENT_TORP_END: int = 8         # One past last (slots 1-7)
-KLN_TORP_START: int = 9       # First Klingon torpedo slot
-KLN_TORP_END: int = 16        # One past last (slots 9-15)
-NUM_OBJECTS: int = 16         # Total slots in object table
+# ── Robot AI ─────────────────────────────────────────────────────────────────
+PROB_IMPULSE = 16     # Thrust probability: 1 / PROB_IMPULSE per tick
+PROB_PHOTON  = 8      # Firing probability: 1 / PROB_PHOTON per tick
+PROB_HYPER   = 1024   # Hyperspace probability: 1 / PROB_HYPER per tick
 
-# EFLG values
-EFLG_INACTIVE: int = 0
-EFLG_ACTIVE: int = 1
-EFLG_EXPLODING: int = -1
+# ── Attract mode ──────────────────────────────────────────────────────────────
+ATTRACT_SCREEN_COUNT    = 4     # Number of attract screens
+ATTRACT_SCREEN_TICKS    = 600   # Ticks per attract screen (~8 s at 73 fps)
 
-# UFLG bits
-REDRAW_BIT: int = 0x01
+# ── Colours ───────────────────────────────────────────────────────────────────
+BLACK  = (0,   0,   0)
+WHITE  = (255, 255, 255)
 
-# FLAGS bits
-THRUST_BIT: int = 0x01
-CLOAK_BIT: int = 0x02
+# Neon colour palette
+NEON_ENT_GLOW  = (0,   220, 255)   # Electric cyan  — Enterprise
+NEON_KLN_GLOW  = (255, 120, 0)     # Orange         — Klingon
+NEON_ETORP_GLOW= (0,   255, 100)   # Green          — Enterprise torpedoes
+NEON_KTORP_GLOW= (255, 50,  50)    # Red            — Klingon torpedoes
+NEON_PLANET    = (160, 80,  255)   # Purple         — Planet (colour shift only)
+NEON_STAR      = (20,  20,  70)    # Deep blue      — Starfield
+NEON_ENT_HYPER = (0,   160, 255)   # Blue           — Enterprise particles
+NEON_KLN_HYPER = (255, 80,  0)     # Orange         — Klingon particles
 
-# FIRE bits
-TORP_FIRE_BIT: int = 0x01
-HYPER_FIRE_BIT: int = 0x02
+# ── Player indices ────────────────────────────────────────────────────────────
+PLAYER_ENT = 0   # Enterprise = Player 1
+PLAYER_KLN = 1   # Klingon    = Player 2
 
-# PLANET_ENABLE bits
-PLANET_BIT: int = 0x01        # BIT0 — planet visible + collision active
-GRAVITY_BIT: int = 0x02       # BIT1 — gravity active
-
-# AUTO_FLAG bits
-AUTO_ENT_BIT: int = 0x01      # BIT0 — Enterprise robot active
-AUTO_KLN_BIT: int = 0x02      # BIT1 — Klingon robot active
-
-# ---------------------------------------------------------------------------
-# Game modes
-# ---------------------------------------------------------------------------
-MODE_ATTRACT: int = 0
-MODE_PLAY: int = 1
-
-# ---------------------------------------------------------------------------
-# Hyperspace animation
-# ---------------------------------------------------------------------------
-HYPER_DURATION: int = 64      # Ticks for hyperspace animation (split 50/50 expand/contract)
-HYPER_PHASE: int = 32         # Ticks per expand/contract phase (HYPER_DURATION // 2)
-HYPER_PARTICLES: int = 32     # Particles per ship
-EXPLOSION_FRAMES: int = 8     # Number of explosion animation frames
-SHIP_EXPLOSION_TICKS: int = 100  # exps value set on ship death (≈1.37 s at 73 fps)
-
-# ---------------------------------------------------------------------------
-# Attract mode
-# ---------------------------------------------------------------------------
-ATTRACT_SCREENS: int = 4      # Number of attract screen pages
-ATTRACT_CYCLE_TIME: int = 500 # Ticks per attract screen
+# ── Object table indices ──────────────────────────────────────────────────────
+OBJ_ENT        = 0          # Index of Enterprise ship in object table
+OBJ_ENT_TORPS  = slice(1, 8)   # Enterprise torpedoes 0-6
+OBJ_KLN        = 8          # Index of Klingon ship in object table
+OBJ_KLN_TORPS  = slice(9, 16)  # Klingon torpedoes 0-6

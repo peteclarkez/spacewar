@@ -1,166 +1,174 @@
-"""Tests for torpedo.py — photon torpedo firing logic."""
+"""
+Tests for torpedo.py — launch, physics, lifespan, pool management, collisions.
+"""
 
 import pytest
-
-from spacewar.init import new_game_state
-from spacewar.torpedo import (
-    fire_enterprise_torpedo, fire_klingon_torpedo, find_free_torpedo,
-)
+from spacewar.torpedo import Torpedo, TorpedoPool
 from spacewar.constants import (
-    ENT_OBJ, KLN_OBJ,
-    ENT_TORP_START, ENT_TORP_END,
-    KLN_TORP_START, KLN_TORP_END,
-    EFLG_ACTIVE, EFLG_INACTIVE,
-    TORP_FIRE_BIT, PHOTON_LAUNCH_ENERGY, PHOTON_ENERGY,
-    PHOTON_SOUND, STARTING_ENERGY,
+    PHOTON_ENERGY, PHOTON_TIME, MAX_TORPS,
+    SHIP_TO_TORP_RANGE, TORP_TO_TORP_RANGE,
+    PLAYER_ENT, PLAYER_KLN,
 )
 
 
-class TestFindFreeTorpedo:
-    def test_finds_first_inactive(self):
-        state = new_game_state()
-        # All torps start inactive
-        idx = find_free_torpedo(state, ENT_TORP_START, ENT_TORP_END)
-        assert idx == ENT_TORP_START
+class TestTorpedoLaunch:
+    def test_inactive_by_default(self):
+        t = Torpedo()
+        assert not t.active
 
-    def test_skips_active(self):
-        state = new_game_state()
-        state.objects[ENT_TORP_START].eflg = EFLG_ACTIVE
-        idx = find_free_torpedo(state, ENT_TORP_START, ENT_TORP_END)
-        assert idx == ENT_TORP_START + 1
+    def test_launch_activates(self):
+        t = Torpedo()
+        t.launch(100.0, 50.0, 0.0, 0.0, 0, PLAYER_ENT)
+        assert t.active
+        assert not t.exploding
 
-    def test_all_active_returns_none(self):
-        state = new_game_state()
-        for i in range(ENT_TORP_START, ENT_TORP_END):
-            state.objects[i].eflg = EFLG_ACTIVE
-        idx = find_free_torpedo(state, ENT_TORP_START, ENT_TORP_END)
-        assert idx is None
+    def test_initial_energy(self):
+        t = Torpedo()
+        t.launch(100.0, 50.0, 0.0, 0.0, 0, PLAYER_ENT)
+        assert t.energy == PHOTON_ENERGY
 
-    def test_klingon_range(self):
-        state = new_game_state()
-        idx = find_free_torpedo(state, KLN_TORP_START, KLN_TORP_END)
-        assert idx == KLN_TORP_START
+    def test_velocity_inherits_ship(self):
+        t = Torpedo()
+        t.launch(100.0, 50.0, 3.0, 1.0, 0, PLAYER_ENT)
+        # Torpedo velocity should be > ship velocity in facing direction
+        assert t.vx > 3.0
 
+    def test_spawn_offset_applied(self):
+        t = Torpedo()
+        # Angle 0 = East → torpedo spawns to the right of ship
+        t.launch(100.0, 50.0, 0.0, 0.0, 0, PLAYER_ENT)
+        assert t.x > 100.0    # offset forward
 
-class TestFireEnterpriseTorpedo:
-    def test_successful_fire(self):
-        """Happy path: torpedo is activated and ship energy decreases."""
-        state = new_game_state()
-        ship = state.objects[ENT_OBJ]
-        ship.energy = STARTING_ENERGY
-        energy_before = ship.energy
+    def test_owner_recorded(self):
+        t = Torpedo()
+        t.launch(100.0, 50.0, 0.0, 0.0, 0, PLAYER_KLN)
+        assert t.owner == PLAYER_KLN
 
-        fire_enterprise_torpedo(state)
-
-        # One torpedo should now be active
-        active_torps = [
-            i for i in range(ENT_TORP_START, ENT_TORP_END)
-            if state.objects[i].eflg == EFLG_ACTIVE
-        ]
-        assert len(active_torps) == 1
-
-        # Ship energy reduced
-        assert ship.energy == energy_before - PHOTON_LAUNCH_ENERGY
-
-        # Torpedo has correct energy
-        assert state.objects[active_torps[0]].energy == PHOTON_ENERGY
-
-        # Sound flag set
-        assert state.sound_flag & PHOTON_SOUND
-
-    def test_no_fire_when_no_energy(self):
-        """Cannot fire without energy."""
-        state = new_game_state()
-        state.objects[ENT_OBJ].energy = 0
-
-        fire_enterprise_torpedo(state)
-
-        active = sum(
-            1 for i in range(ENT_TORP_START, ENT_TORP_END)
-            if state.objects[i].eflg == EFLG_ACTIVE
-        )
-        assert active == 0
-
-    def test_no_fire_when_all_slots_active(self):
-        """Cannot fire when all 7 torpedo slots are occupied."""
-        state = new_game_state()
-        for i in range(ENT_TORP_START, ENT_TORP_END):
-            state.objects[i].eflg = EFLG_ACTIVE
-
-        fire_enterprise_torpedo(state)
-        # No new torps added (all were already active)
-        active = sum(
-            1 for i in range(ENT_TORP_START, ENT_TORP_END)
-            if state.objects[i].eflg == EFLG_ACTIVE
-        )
-        assert active == 7
-
-    def test_torp_fire_debounce(self):
-        """TORP_FIRE_BIT prevents double-firing."""
-        state = new_game_state()
-        state.objects[ENT_OBJ].fire |= TORP_FIRE_BIT
-
-        fire_enterprise_torpedo(state)
-
-        active = sum(
-            1 for i in range(ENT_TORP_START, ENT_TORP_END)
-            if state.objects[i].eflg == EFLG_ACTIVE
-        )
-        assert active == 0
-
-    def test_torpedo_inherits_ship_velocity(self):
-        """Torpedo velocity includes ship's current velocity."""
-        state = new_game_state()
-        ship = state.objects[ENT_OBJ]
-        ship.angle = 0       # pointing right
-        ship.vx = 3
-        ship.vy = 0
-
-        fire_enterprise_torpedo(state)
-
-        active_idx = next(
-            i for i in range(ENT_TORP_START, ENT_TORP_END)
-            if state.objects[i].eflg == EFLG_ACTIVE
-        )
-        torp = state.objects[active_idx]
-        # Torpedo vx should be >= ship vx (ship vel + fire impulse)
-        assert torp.vx >= ship.vx
-
-    def test_torpedo_position_near_ship(self):
-        """Torpedo spawns near the firing ship."""
-        state = new_game_state()
-        ship = state.objects[ENT_OBJ]
-        ship.x, ship.y = 200, 100
-        ship.angle = 0
-
-        fire_enterprise_torpedo(state)
-
-        active_idx = next(
-            (i for i in range(ENT_TORP_START, ENT_TORP_END)
-             if state.objects[i].eflg == EFLG_ACTIVE),
-            None,
-        )
-        assert active_idx is not None
-        torp = state.objects[active_idx]
-        assert abs(torp.x - ship.x) < 20
-        assert abs(torp.y - ship.y) < 20
+    def test_reset(self):
+        t = Torpedo()
+        t.launch(100.0, 50.0, 0.0, 0.0, 0, PLAYER_ENT)
+        t.reset()
+        assert not t.active
+        assert t.energy == 0
 
 
-class TestFireKlingonTorpedo:
-    def test_fires_in_klingon_slots(self):
-        """Klingon torpedo goes into slots 9-15."""
-        state = new_game_state()
+class TestTorpedoUpdate:
+    def test_moves_each_tick(self):
+        t = Torpedo()
+        t.launch(200.0, 100.0, 0.0, 0.0, 0, PLAYER_ENT)
+        x0 = t.x
+        t.update(gravity_on=False, tick=1)
+        assert t.x != x0
 
-        fire_klingon_torpedo(state)
+    def test_energy_drains_on_period(self):
+        t = Torpedo()
+        t.launch(200.0, 100.0, 0.0, 0.0, 0, PLAYER_ENT)
+        initial = t.energy
+        # tick=PHOTON_TIME → first drain
+        t.update(gravity_on=False, tick=PHOTON_TIME)
+        assert t.energy == initial - 1
 
-        active = [
-            i for i in range(KLN_TORP_START, KLN_TORP_END)
-            if state.objects[i].eflg == EFLG_ACTIVE
-        ]
-        assert len(active) == 1
-        # Confirm no Enterprise torp was activated
-        ent_active = [
-            i for i in range(ENT_TORP_START, ENT_TORP_END)
-            if state.objects[i].eflg == EFLG_ACTIVE
-        ]
-        assert len(ent_active) == 0
+    def test_no_drain_off_period(self):
+        t = Torpedo()
+        t.launch(200.0, 100.0, 0.0, 0.0, 0, PLAYER_ENT)
+        initial = t.energy
+        t.update(gravity_on=False, tick=1)
+        assert t.energy == initial
+
+    def test_explodes_when_energy_zero(self):
+        t = Torpedo()
+        t.launch(200.0, 100.0, 0.0, 0.0, 0, PLAYER_ENT)
+        t.energy = 1
+        t.update(gravity_on=False, tick=PHOTON_TIME)
+        assert t.exploding
+
+    def test_gravity_affects_velocity(self):
+        from spacewar.constants import PLANET_X, PLANET_Y
+        t = Torpedo()
+        t.launch(PLANET_X + 200, PLANET_Y, 0.0, 0.0, 0, PLAYER_ENT)
+        vx0 = t.vx
+        t.update(gravity_on=True, tick=1)
+        assert t.vx < vx0   # pulled leftward toward planet
+
+    def test_explosion_animation_advances(self):
+        t = Torpedo()
+        t.launch(200.0, 100.0, 0.0, 0.0, 0, PLAYER_ENT)
+        t.begin_explosion()
+        assert t.exploding
+        t0 = t.exptick
+        t.update(gravity_on=False, tick=1)
+        assert t.exptick > t0
+
+    def test_explosion_deactivates_after_anim(self):
+        t = Torpedo()
+        t.launch(200.0, 100.0, 0.0, 0.0, 0, PLAYER_ENT)
+        t.begin_explosion()
+        for i in range(40):
+            t.update(gravity_on=False, tick=i)
+        assert not t.active
+
+
+class TestTorpedoPool:
+    def test_fire_succeeds_in_empty_pool(self, ent_torps):
+        ok = ent_torps.fire(200.0, 100.0, 0.0, 0.0, 0)
+        assert ok
+
+    def test_fire_uses_first_free_slot(self, ent_torps):
+        ent_torps.fire(200.0, 100.0, 0.0, 0.0, 0)
+        actives = ent_torps.active_torpedoes()
+        assert len(actives) == 1
+
+    def test_fire_fills_all_slots(self, ent_torps):
+        for _ in range(MAX_TORPS):
+            assert ent_torps.fire(200.0, 100.0, 0.0, 0.0, 0)
+
+    def test_fire_blocked_when_full(self, ent_torps):
+        for _ in range(MAX_TORPS):
+            ent_torps.fire(200.0, 100.0, 0.0, 0.0, 0)
+        ok = ent_torps.fire(200.0, 100.0, 0.0, 0.0, 0)
+        assert not ok
+
+    def test_reset_clears_all(self, ent_torps):
+        for _ in range(MAX_TORPS):
+            ent_torps.fire(200.0, 100.0, 0.0, 0.0, 0)
+        ent_torps.reset()
+        assert len(ent_torps.active_torpedoes()) == 0
+
+    def test_update_advances_torpedoes(self, ent_torps):
+        ent_torps.fire(200.0, 100.0, 0.0, 0.0, 0)
+        t = ent_torps.slots[0]
+        x0 = t.x
+        ent_torps.update(gravity_on=False, tick=1)
+        assert t.x != x0
+
+    def test_active_torpedoes_excludes_exploding(self, ent_torps):
+        ent_torps.fire(200.0, 100.0, 0.0, 0.0, 0)
+        ent_torps.slots[0].begin_explosion()
+        assert len(ent_torps.active_torpedoes()) == 0
+
+    def test_owner_propagated(self, kln_torps):
+        kln_torps.fire(200.0, 100.0, 0.0, 0.0, 128)
+        assert kln_torps.slots[0].owner == PLAYER_KLN
+
+
+class TestExplosion:
+    def test_begin_explosion(self):
+        t = Torpedo()
+        t.launch(200.0, 100.0, 0.0, 0.0, 0, PLAYER_ENT)
+        t.begin_explosion()
+        assert t.exploding
+        assert t.active    # still active during animation
+        assert t.exptick == 0
+
+    def test_begin_planet_hit(self):
+        t = Torpedo()
+        t.launch(200.0, 100.0, 0.0, 0.0, 0, PLAYER_ENT)
+        t.begin_planet_hit()
+        assert t.exploding
+
+    def test_is_alive_false_when_exploding(self):
+        t = Torpedo()
+        t.launch(200.0, 100.0, 0.0, 0.0, 0, PLAYER_ENT)
+        assert t.is_alive
+        t.begin_explosion()
+        assert not t.is_alive

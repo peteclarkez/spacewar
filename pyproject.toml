@@ -1,22 +1,28 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "spacewar"
-version = "0.1.0"
-description = "Faithful recreation of Bill Seiler's SpaceWar v1.72 (1985)"
+version = "1.0.0"
+description = "Faithful Python/Pygame recreation of SpaceWar 1985 (DOS/CGA)"
 requires-python = ">=3.11"
-dependencies = ["pygame>=2.5"]
+dependencies = [
+    "pygame>=2.5",
+]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-cov>=4.1"]
+dev = [
+    "pytest>=7",
+    "pytest-cov",
+]
 
 [project.scripts]
-spacewar = "spacewar.main:main"
+spacewar = "spacewar.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-v"

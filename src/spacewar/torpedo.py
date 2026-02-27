@@ -1,124 +1,162 @@
-"""torpedo.py — photon torpedo firing logic.
+"""
+Photon torpedo — lifecycle, physics, and rendering helpers.
 
-Each ship has 7 torpedo slots.  A torpedo is launched by finding the first
-inactive slot, initialising it with the ship's position + facing offset and
-velocity + facing impulse, and marking it active.
-
-Torpedoes drain 1 energy unit every PHOTON_TIME ticks (managed in physics.py).
-Death when ENRGY (energy) reaches 0 → eflg set to EFLG_EXPLODING.
-
-Public API
-----------
-fire_enterprise_torpedo(state)   — fire one Enterprise torpedo (if possible)
-fire_klingon_torpedo(state)      — fire one Klingon torpedo (if possible)
-find_free_torpedo(state, start, end) -> int | None
+Each ship maintains a pool of MAX_TORPS (7) torpedo slots.
+A torpedo's "fuel" (energy) ticks down; when exhausted it explodes.
+Gravity affects torpedoes identically to ships.
 """
 
-from .constants import (
-    ENT_OBJ, KLN_OBJ,
-    ENT_TORP_START, ENT_TORP_END,
-    KLN_TORP_START, KLN_TORP_END,
-    EFLG_ACTIVE, EFLG_INACTIVE,
-    TORP_FIRE_BIT, PHOTON_LAUNCH_ENERGY, PHOTON_ENERGY,
-    PHOTON_SOUND,
-    VIRTUAL_W, VIRTUAL_H,
+from __future__ import annotations
+from dataclasses import dataclass
+
+from spacewar.constants import (
+    PHOTON_ENERGY, PHOTON_TIME, MAX_VELOCITY,
+    FIRE_SCALE, TORP_SPAWN_SHIFT, MAX_TORPS,
+    PLAYER_ENT,
 )
-from .trig import cos_lookup, sin_lookup
-from .init import GameObject, GameState
+from spacewar import trig as T
+from spacewar.physics import cap_velocity, gravity_delta, integrate, wrap
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+@dataclass
+class Torpedo:
+    """A single torpedo in the pool."""
+    active:   bool  = False
+    x:        float = 0.0
+    y:        float = 0.0
+    vx:       float = 0.0
+    vy:       float = 0.0
+    angle:    int   = 0      # 256-unit angle at launch
+    energy:   int   = 0      # countdown; 0 → explode
+    owner:    int   = PLAYER_ENT   # PLAYER_ENT or PLAYER_KLN
+    exploding: bool = False  # explosion animation active
+    exptick:  int   = 0      # explosion animation counter
 
-def find_free_torpedo(state: GameState, start: int, end: int) -> int | None:
-    """Return the index of the first inactive torpedo slot, or None.
+    def reset(self) -> None:
+        self.active = self.exploding = False
+        self.x = self.y = self.vx = self.vy = 0.0
+        self.energy = self.angle = self.exptick = 0
 
-    start, end — half-open range of torpedo indices to search.
-    """
-    for i in range(start, end):
-        if state.objects[i].eflg == EFLG_INACTIVE:
-            return i
-    return None
+    def launch(self, ship_x: float, ship_y: float,
+               ship_vx: float, ship_vy: float,
+               ship_angle: int, owner: int) -> None:
+        """
+        Launch the torpedo from the ship.
+        Velocity = ship_vel + (cos/sin * 4).
+        Spawn offset keeps it outside SHIP_TO_TORP_RANGE.
+        """
+        ox, oy = T.spawn_offset(ship_angle, TORP_SPAWN_SHIFT)
+        tvx, tvy = T.torpedo_velocity(ship_angle, FIRE_SCALE)
 
+        self.x      = ship_x + ox
+        self.y      = ship_y + oy
+        self.vx     = cap_velocity(ship_vx + tvx)
+        self.vy     = cap_velocity(ship_vy + tvy)
+        self.angle  = ship_angle
+        self.energy = PHOTON_ENERGY
+        self.owner  = owner
+        self.active = True
+        self.exploding = False
+        self.exptick   = 0
 
-def _launch_torpedo(ship: GameObject, torp: GameObject) -> None:
-    """Copy ship state into torpedo slot and apply launch impulse.
+    def update(self, gravity_on: bool, tick: int) -> None:
+        """
+        Advance torpedo physics and energy drain.
+        tick: the global game tick (used to time energy drain).
+        """
+        if not self.active:
+            return
 
-    - Position = ship position + ~7px in the facing direction
-    - Velocity  = ship velocity + ~3 px/tick in the facing direction
-    """
-    angle = ship.angle
-    cos_val = cos_lookup(angle)   # ±32767 signed 16-bit
-    sin_val = sin_lookup(angle)
+        if self.exploding:
+            self.exptick += 2
+            if self.exptick > 64:
+                self.active = self.exploding = False
+            return
 
-    # Position: spawn ~15 virtual pixels ahead of the ship centre.
-    # 32767 >> 11 = 15, which is safely beyond SHIP_TO_TORP_RANGE=8 so the
-    # torpedo does not immediately collide with the firing ship.
-    torp.x = (ship.x + (cos_val >> 11)) % VIRTUAL_W
-    torp.y = (ship.y + (sin_val >> 11)) % VIRTUAL_H
-    torp.x_frac = ship.x_frac
-    torp.y_frac = ship.y_frac
+        # Gravity
+        if gravity_on:
+            ax, ay = gravity_delta(self.x, self.y)
+            self.vx = cap_velocity(self.vx + ax)
+            self.vy = cap_velocity(self.vy + ay)
 
-    # Velocity: ship velocity plus ~3 px/tick launch impulse.
-    # 32767 >> 13 = 3; preserves sign for all quadrants.
-    torp.vx = ship.vx + (cos_val >> 13)
-    torp.vy = ship.vy + (sin_val >> 13)
-    torp.vx_frac = ship.vx_frac
-    torp.vy_frac = ship.vy_frac
+        # Move
+        self.x, self.y = integrate(self.x, self.y, self.vx, self.vy)
 
-    torp.angle = angle
-    torp.rotate = 0
-    torp.flags = 0
-    torp.fire = 0
-    torp.energy = PHOTON_ENERGY   # ENRGY = 40; lifetime fuel
-    torp.eflg = EFLG_ACTIVE
-    torp.uflg = 0
-    torp.exps = 0
+        # Energy drain every PHOTON_TIME ticks
+        if tick % PHOTON_TIME == 0:
+            self.energy -= 1
+            if self.energy <= 0:
+                self.begin_explosion()
 
-    # Wrap torpedo starting position onto the virtual screen
-    torp.x = torp.x % VIRTUAL_W
-    torp.y = torp.y % VIRTUAL_H
+    def begin_explosion(self) -> None:
+        self.exploding = True
+        self.exptick   = 0
+        # Keep active=True so explosion draws; set to False when anim ends
 
+    def begin_planet_hit(self) -> None:
+        self.begin_explosion()
 
-def _fire(state: GameState, ship_idx: int, torp_start: int, torp_end: int) -> None:
-    """Common fire routine for both ships.
-
-    Guards: ship must be active, have energy, and the torp debounce must be clear.
-    """
-    ship = state.objects[ship_idx]
-
-    # Must have dilithium energy to fire
-    if ship.energy <= 0:
-        return
-
-    # Torp debounce — prevent double-firing on a held key
-    if ship.fire & TORP_FIRE_BIT:
-        return
-
-    slot = find_free_torpedo(state, torp_start, torp_end)
-    if slot is None:
-        return
-
-    # Cost to launch
-    ship.energy -= PHOTON_LAUNCH_ENERGY
-    ship.fire |= TORP_FIRE_BIT    # set debounce
-
-    _launch_torpedo(ship, state.objects[slot])
-
-    # Signal sound system
-    state.sound_flag |= PHOTON_SOUND
-
-
-# ---------------------------------------------------------------------------
-# Public fire functions
-# ---------------------------------------------------------------------------
-
-def fire_enterprise_torpedo(state: GameState) -> None:
-    """Fire one Enterprise photon torpedo."""
-    _fire(state, ENT_OBJ, ENT_TORP_START, ENT_TORP_END)
+    @property
+    def is_alive(self) -> bool:
+        return self.active and not self.exploding
 
 
-def fire_klingon_torpedo(state: GameState) -> None:
-    """Fire one Klingon photon torpedo."""
-    _fire(state, KLN_OBJ, KLN_TORP_START, KLN_TORP_END)
+class TorpedoPool:
+    """Manages up to MAX_TORPS torpedoes for one ship."""
+
+    def __init__(self, owner: int) -> None:
+        self.owner = owner
+        self.slots: list[Torpedo] = [Torpedo() for _ in range(MAX_TORPS)]
+
+    def reset(self) -> None:
+        for t in self.slots:
+            t.reset()
+
+    def fire(self, ship_x: float, ship_y: float,
+             ship_vx: float, ship_vy: float,
+             ship_angle: int) -> bool:
+        """
+        Attempt to fire a torpedo. Returns True if a slot was free.
+        Blocked when all 7 slots are active.
+        """
+        for t in self.slots:
+            if not t.active:
+                t.launch(ship_x, ship_y, ship_vx, ship_vy, ship_angle, self.owner)
+                return True
+        return False
+
+    def update(self, gravity_on: bool, tick: int) -> None:
+        for t in self.slots:
+            t.update(gravity_on, tick)
+
+    def active_torpedoes(self) -> list[Torpedo]:
+        return [t for t in self.slots if t.active and not t.exploding]
+
+    def draw(self, surface, neon: bool = False) -> None:
+        """Draw all active (non-exploding) torpedoes."""
+        from spacewar import sprites as SP
+        from spacewar.constants import Y_SCALE, NEON_ETORP_GLOW, NEON_KTORP_GLOW
+
+        for t in self.slots:
+            if not t.active:
+                continue
+            if t.exploding:
+                _draw_torp_explosion(surface, t)
+                continue
+            surf = SP.get_torp_frame(self.owner, t.angle)
+            if neon:
+                glow = NEON_ETORP_GLOW if self.owner == 0 else NEON_KTORP_GLOW
+                SP.draw_neon_sprite(surface, surf, t.x, t.y, glow)
+            else:
+                SP.draw_sprite_centered(surface, surf, t.x, t.y)
+
+
+def _draw_torp_explosion(surface, t: Torpedo) -> None:
+    """Small expanding circle explosion for a torpedo."""
+    from spacewar.constants import Y_SCALE, WHITE
+    import pygame
+    sx = int(t.x)
+    sy = int(t.y) * Y_SCALE
+    radius = (t.exptick // 8) + 1
+    if radius > 0:
+        pygame.draw.circle(surface, WHITE, (sx, sy), radius, 1)

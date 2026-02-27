@@ -1,234 +1,140 @@
-"""phaser.py — phaser beam firing, hit detection, and erase.
+"""
+Phaser weapon — ray casting, hit detection, and rendering.
 
-The phaser beam is a ray cast in the ship's current facing direction.
-Key parameters:
-  PHASER_RANGE   = 96  px  — maximum ray length
-  Dead zone      = first 9 pixels — no hit-check
-  Hit interval   = every 8 pixels (PHASER_TO_OBJ_RANGE)
-  Damage to ships: PHASER_DAMAGE = 2 shields
-  Effect on torps: set EFLG_EXPLODING
-  Planet:          stop ray if encountered
-
-State machine (PHST field on ship object):
-  255 (PHASER_IDLE) — not firing
-  24  (PHASER_DELAY) — just fired; count down each tick
-  20  (PHASER_ERASE) — main.py triggers erase pass this tick
-  19..1              — cooldown
-  0                  — reset to PHASER_IDLE
-
-Public API
-----------
-fire_phaser_enterprise(state, surface)
-fire_phaser_klingon(state, surface)
-erase_phaser_enterprise(state, surface)
-erase_phaser_klingon(state, surface)
+A phaser ray is cast from the ship outward in the ship's facing direction.
+The first PHASER_SKIP pixels are a dead zone (prevents self-hit).
+Hit detection is checked every PHASER_TO_OBJ_RANGE pixels along the ray.
+The ray terminates on hitting a torpedo, ship, or planet.
 """
 
 from __future__ import annotations
+import math
+from dataclasses import dataclass
 
-import pygame
-
-from .constants import (
-    ENT_OBJ, KLN_OBJ,
-    EFLG_ACTIVE, EFLG_EXPLODING,
-    PHASER_IDLE, PHASER_DELAY, PHASER_ERASE, PHASER_RANGE,
-    PHASER_TO_OBJ_RANGE, PHASER_DAMAGE, PHASER_FIRE_ENERGY,
-    PHASER_SOUND, PLANET_BIT,
+from spacewar.constants import (
+    PHASER_RANGE, PHASER_ERASE, PHASER_DELAY,
+    PHASER_TO_OBJ_RANGE, PHASER_DAMAGE, PHASER_SKIP,
     PLANET_X, PLANET_Y, PLANET_RANGE,
-    Y_SCALE,
+    PLAYER_ENT, PLAYER_KLN,
+    WHITE, Y_SCALE,
 )
-from .trig import cos_lookup, sin_lookup
-from .init import GameState
-
-# Colour used for the phaser beam (white monochrome)
-PHASER_COLOR = (255, 255, 255)
-
-# Pixels at the muzzle that are skipped before hit checks begin
-_DEAD_ZONE: int = 9
+from spacewar import trig as T
 
 
-# ---------------------------------------------------------------------------
-# Internal ray walker
-# ---------------------------------------------------------------------------
+@dataclass
+class Phaser:
+    """State for one ship's phaser."""
+    active:    bool  = False   # ray is visible / in flight
+    timer:     int   = 0       # counts up; erased at PHASER_ERASE, reset at PHASER_DELAY
+    owner:     int   = PLAYER_ENT
+    start_x:   float = 0.0    # origin (ship position at fire)
+    start_y:   float = 0.0
+    end_x:     float = 0.0    # where the ray terminated
+    end_y:     float = 0.0
+    hit:       bool  = False
 
-def _draw_phaser_ray(
-    state: GameState,
-    surface: pygame.Surface,
-    ship_idx: int,
-    compare: bool,
-    color: tuple | None = None,
-) -> int:
-    """Step along the phaser ray, drawing pixels and optionally checking hits.
+    def reset(self) -> None:
+        self.active = self.hit = False
+        self.timer  = 0
 
-    Args:
-        state:    game state
-        surface:  pygame surface to draw on (screen coordinates)
-        ship_idx: ENT_OBJ or KLN_OBJ
-        compare:  True → draw beam + check hits; False → erase (draw black)
+    def tick(self) -> None:
+        """Advance the phaser timer each game tick."""
+        if self.timer > 0:
+            self.timer -= 1
+            if self.timer == 0:
+                self.active = False
 
-    Returns:
-        Number of pixels stepped (used to save phaser_count for erase pass).
 
-    - Steps in cos/sin direction
-    - Skip dead zone (first 9 pixels)
-    - Every 8 pixels: Manhattan-distance hit check against all active objects
+def cast_phaser(
+    phaser: Phaser,
+    ship_x: float,
+    ship_y: float,
+    ship_angle: int,
+    targets_ships: list,     # list of Ship objects (opponents + self not checked)
+    targets_torps: list,     # list of Torpedo objects (all active)
+    planet_active: bool,
+) -> tuple[list, list]:
     """
-    ship = state.objects[ship_idx]
+    Cast the phaser ray and return (ships_hit, torps_hit).
 
-    if compare:
-        ox = ship.x
-        oy = ship.y
-        oa = ship.angle
-    else:
-        # Erase pass uses saved origin/angle, not current ship position
-        ox = ship.phaser_x
-        oy = ship.phaser_y
-        oa = ship.phaser_angle
+    The ray steps pixel-by-pixel; hit detection at every PHASER_TO_OBJ_RANGE px.
+    Modifies phaser.end_x/.end_y to record where the ray stopped.
+    Returns lists of (ship, damage) and (torp,) tuples for the caller to apply.
+    """
+    dx = T.cos_fp(ship_angle) / 32767.0   # unit direction vector
+    dy = T.sin_fp(ship_angle) / 32767.0
 
-    # Direction unit vector from sin/cos table, scaled to sub-pixel steps
-    # We use floating-point for the ray accumulator (integer would drift)
-    dx = cos_lookup(oa) / 32767.0   # normalised to ±1.0
-    dy = sin_lookup(oa) / 32767.0
+    ships_hit = []
+    torps_hit  = []
 
-    if color is None:
-        color = PHASER_COLOR if compare else (0, 0, 0)
+    end_x = ship_x
+    end_y = ship_y
+    hit_something = False
 
-    rx = float(ox)
-    ry = float(oy)
-    count = 0
-    hit_interval_counter = 0
+    for step in range(PHASER_RANGE):
+        rx = ship_x + dx * step
+        ry = ship_y + dy * step
 
-    max_range = ship.phaser_count if not compare else PHASER_RANGE
+        end_x = rx
+        end_y = ry
 
-    for step in range(max_range):
-        rx += dx
-        ry += dy
-        count += 1
-
-        # Draw pixel (Y doubled for screen coords)
-        sx = int(rx)
-        sy = int(ry)
-        if 0 <= sx < surface.get_width() and 0 <= sy * Y_SCALE < surface.get_height():
-            surface.set_at((sx, sy * Y_SCALE), color)
-            if Y_SCALE > 1:
-                surface.set_at((sx, sy * Y_SCALE + 1), color)
-
-        # Skip dead zone — no hit checks for the first _DEAD_ZONE pixels
-        if step < _DEAD_ZONE:
+        # Skip dead zone around firing ship
+        if step < PHASER_SKIP:
             continue
 
-        # Hit-check every PHASER_TO_OBJ_RANGE pixels
-        hit_interval_counter += 1
-        if hit_interval_counter < PHASER_TO_OBJ_RANGE:
+        # Check hits every PHASER_TO_OBJ_RANGE pixels
+        if step % PHASER_TO_OBJ_RANGE != 0:
             continue
-        hit_interval_counter = 0
-
-        if not compare:
-            continue   # erase pass — no hits
 
         # Check planet collision
-        if state.planet_enable & PLANET_BIT:
-            if abs(sx - PLANET_X) < PLANET_RANGE and abs(sy - PLANET_Y) < PLANET_RANGE:
-                break   # ray stops at planet
+        if planet_active:
+            pd = math.hypot(rx - PLANET_X, ry - PLANET_Y)
+            if pd <= PLANET_RANGE:
+                hit_something = True
+                break
 
-        # Check all active objects for Manhattan-distance hit
-        for i, obj in enumerate(state.objects):
-            if obj.eflg == EFLG_ACTIVE:
-                if abs(obj.x - sx) < PHASER_TO_OBJ_RANGE and abs(obj.y - sy) < PHASER_TO_OBJ_RANGE:
-                    # Determine if hit target is a ship or torpedo
-                    if i == ENT_OBJ or i == KLN_OBJ:
-                        obj.shields -= PHASER_DAMAGE
-                    else:
-                        # Torpedo hit
-                        obj.eflg = EFLG_EXPLODING
-                        obj.exps = 8
+        # Check torpedo hits
+        for t in targets_torps:
+            if not (t.active and not t.exploding):
+                continue
+            dist = math.hypot(rx - t.x, ry - t.y)
+            if dist < PHASER_TO_OBJ_RANGE:
+                torps_hit.append(t)
+                hit_something = True
+                break
 
-    return count
+        if hit_something:
+            break
+
+        # Check ship hits
+        for ship in targets_ships:
+            if not ship.alive:
+                continue
+            dist = math.hypot(rx - ship.x, ry - ship.y)
+            if dist < PHASER_TO_OBJ_RANGE:
+                ships_hit.append(ship)
+                hit_something = True
+                break
+
+        if hit_something:
+            break
+
+    phaser.end_x = end_x
+    phaser.end_y = end_y
+    phaser.hit = hit_something
+    return ships_hit, torps_hit
 
 
-# ---------------------------------------------------------------------------
-# Fire and erase — Enterprise
-# ---------------------------------------------------------------------------
-
-def fire_phaser_enterprise(state: GameState, surface: pygame.Surface) -> None:
-    """Fire Enterprise phaser beam."""
-    ship = state.objects[ENT_OBJ]
-    if ship.phaser_state != PHASER_IDLE:
+def draw_phaser(surface, phaser: Phaser) -> None:
+    """Draw the phaser ray if it is still visible (timer > PHASER_ERASE)."""
+    if not phaser.active:
         return
-    if ship.energy <= 0:
-        return
-
-    ship.energy -= PHASER_FIRE_ENERGY
-    ship.phaser_state = PHASER_DELAY
-
-    # Save origin + angle for the erase pass
-    ship.phaser_x = ship.x
-    ship.phaser_y = ship.y
-    ship.phaser_angle = ship.angle
-
-    count = _draw_phaser_ray(state, surface, ENT_OBJ, compare=True)
-    ship.phaser_count = count
-
-    state.sound_flag |= PHASER_SOUND
-
-
-def erase_phaser_enterprise(state: GameState, surface: pygame.Surface) -> None:
-    """Erase Enterprise phaser beam (replay ray in black)."""
-    _draw_phaser_ray(state, surface, ENT_OBJ, compare=False)
-
-
-# ---------------------------------------------------------------------------
-# Fire and erase — Klingon
-# ---------------------------------------------------------------------------
-
-def fire_phaser_klingon(state: GameState, surface: pygame.Surface) -> None:
-    """Fire Klingon phaser beam."""
-    ship = state.objects[KLN_OBJ]
-    if ship.phaser_state != PHASER_IDLE:
-        return
-    if ship.energy <= 0:
+    if phaser.timer <= (PHASER_DELAY - PHASER_ERASE):
         return
 
-    ship.energy -= PHASER_FIRE_ENERGY
-    ship.phaser_state = PHASER_DELAY
-
-    ship.phaser_x = ship.x
-    ship.phaser_y = ship.y
-    ship.phaser_angle = ship.angle
-
-    count = _draw_phaser_ray(state, surface, KLN_OBJ, compare=True)
-    ship.phaser_count = count
-
-    state.sound_flag |= PHASER_SOUND
-
-
-def erase_phaser_klingon(state: GameState, surface: pygame.Surface) -> None:
-    """Erase Klingon phaser beam (replay ray in black)."""
-    _draw_phaser_ray(state, surface, KLN_OBJ, compare=False)
-
-
-# ---------------------------------------------------------------------------
-# Redraw helpers — called each frame after background blit to restore beam
-# ---------------------------------------------------------------------------
-
-def redraw_phaser_enterprise(state: GameState, surface: pygame.Surface) -> None:
-    """Redraw the Enterprise phaser beam in white (after the background blit erased it).
-
-    Only draws when phaser_state is in the visible window (PHASER_ERASE < state < PHASER_IDLE).
-    Uses the saved origin/angle/count so the ray is pixel-identical to the original.
-    No hit detection is performed.
-    """
-    ship = state.objects[ENT_OBJ]
-    ps = ship.phaser_state
-    if ps == PHASER_IDLE or ps <= PHASER_ERASE:
-        return
-    _draw_phaser_ray(state, surface, ENT_OBJ, compare=False, color=PHASER_COLOR)
-
-
-def redraw_phaser_klingon(state: GameState, surface: pygame.Surface) -> None:
-    """Redraw the Klingon phaser beam in white (after the background blit erased it)."""
-    ship = state.objects[KLN_OBJ]
-    ps = ship.phaser_state
-    if ps == PHASER_IDLE or ps <= PHASER_ERASE:
-        return
-    _draw_phaser_ray(state, surface, KLN_OBJ, compare=False, color=PHASER_COLOR)
+    import pygame
+    sx = int(phaser.start_x)
+    sy = int(phaser.start_y) * Y_SCALE
+    ex = int(phaser.end_x)
+    ey = int(phaser.end_y) * Y_SCALE
+    pygame.draw.line(surface, WHITE, (sx, sy), (ex, ey), 1)
