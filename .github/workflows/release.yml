@@ -109,35 +109,29 @@ jobs:
             artifacts/windows/spacewar-windows.zip \
             artifacts/macos/spacewar-macos.tar.gz
 
-  # ── Optional: push to itch.io via butler ──────────────────────────────────
-  # To enable:
-  #   1. Create a game on itch.io and note the project slug (e.g. yourname/spacewar)
-  #   2. Generate a butler API key at https://itch.io/user/settings/api-keys
-  #   3. Add it as a GitHub secret named BUTLER_API_KEY
-  #   4. Set ITCH_PROJECT below and uncomment this job
-  #
-  # itch:
-  #   needs: build
-  #   runs-on: ubuntu-latest
-  #   env:
-  #     ITCH_PROJECT: yourname/spacewar   # ← set your itch.io project slug
-  #   steps:
-  #     - name: Download all artifacts
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         path: artifacts
-  #
-  #     - name: Install butler
-  #       run: |
-  #         curl -L -o butler.zip https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default
-  #         unzip butler.zip
-  #         chmod +x butler
-  #
-  #     - name: Push to itch.io
-  #       env:
-  #         BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
-  #       run: |
-  #         TAG="${{ github.ref_name }}"
-  #         ./butler push artifacts/linux/spacewar-linux.tar.gz   $ITCH_PROJECT:linux   --userversion "$TAG"
-  #         ./butler push artifacts/windows/spacewar-windows.zip  $ITCH_PROJECT:windows --userversion "$TAG"
-  #         ./butler push artifacts/macos/spacewar-macos.tar.gz   $ITCH_PROJECT:macos   --userversion "$TAG"
+  # ── Push to itch.io via butler ────────────────────────────────────────────
+  itch:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      ITCH_PROJECT: peteclarkez/spacewar
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Install butler
+        run: |
+          curl -L -o butler.zip https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default
+          unzip butler.zip
+          chmod +x butler
+
+      - name: Push to itch.io
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          ./butler push artifacts/linux/spacewar-linux.tar.gz   $ITCH_PROJECT:linux   --userversion "$TAG"
+          ./butler push artifacts/windows/spacewar-windows.zip  $ITCH_PROJECT:windows --userversion "$TAG"
+          ./butler push artifacts/macos/spacewar-macos.tar.gz   $ITCH_PROJECT:macos   --userversion "$TAG"
